@@ -1,0 +1,2 @@
+# Phase 1: Scaffold only — no heavy dependencies
+# Future phases will add targeted dependencies as logic is extracted

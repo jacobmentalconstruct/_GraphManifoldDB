@@ -1,0 +1,103 @@
+Project Tree: C:\Users\jacob\Documents\_UsefulHelperSCRIPTS\_mdgRAG
+Generated: 2026-03-10 07:24:30.212630
+
+├── 📁 docs/
+│   ├── 📄 ARCHITECTURE.md
+│   ├── 📄 DEVLOG.md
+│   ├── 📄 EXTRACTION_RULES.md
+│   ├── 📄 OPPORTUNITIES.md
+│   ├── 📄 PHASE_1_SCOPE.md
+│   ├── 📄 SYSTEM_MAP.md
+│   └── 📄 WATCHLIST.md
+├── 📁 src/
+│   ├── 📁 adapters/
+│   │   ├── 📄 __init__.py
+│   │   └── 📄 legacy_source_notes.md
+│   ├── 📁 core/
+│   │   ├── 📁 contracts/
+│   │   │   ├── 📄 __init__.py
+│   │   │   ├── 📄 evidence_bag_contract.py
+│   │   │   ├── 📄 fusion_contract.py
+│   │   │   ├── 📄 hydration_contract.py
+│   │   │   ├── 📄 manifold_contract.py
+│   │   │   ├── 📄 model_bridge_contract.py
+│   │   │   └── 📄 projection_contract.py
+│   │   ├── 📁 debug/
+│   │   │   ├── 📄 __init__.py
+│   │   │   ├── 📄 inspection.py
+│   │   │   └── 📄 score_dump.py
+│   │   ├── 📁 extraction/
+│   │   │   ├── 📄 __init__.py
+│   │   │   ├── 📄 extractor.py
+│   │   │   └── 📄 extractor_placeholder.py
+│   │   ├── 📁 factory/
+│   │   │   ├── 📄 __init__.py
+│   │   │   └── 📄 manifold_factory.py
+│   │   ├── 📁 fusion/
+│   │   │   ├── 📄 __init__.py
+│   │   │   └── 📄 fusion_engine.py
+│   │   ├── 📁 hydration/
+│   │   │   ├── 📄 __init__.py
+│   │   │   ├── 📄 hydrator.py
+│   │   │   └── 📄 hydrator_placeholder.py
+│   │   ├── 📁 manifolds/
+│   │   │   ├── 📄 __init__.py
+│   │   │   ├── 📄 base_manifold.py
+│   │   │   ├── 📄 external_manifold.py
+│   │   │   ├── 📄 identity_manifold.py
+│   │   │   └── 📄 virtual_manifold.py
+│   │   ├── 📁 math/
+│   │   │   ├── 📄 __init__.py
+│   │   │   ├── 📄 annotator.py
+│   │   │   ├── 📄 friction.py
+│   │   │   ├── 📄 scoring.py
+│   │   │   └── 📄 scoring_placeholders.py
+│   │   ├── 📁 model_bridge/
+│   │   │   ├── 📄 __init__.py
+│   │   │   └── 📄 model_bridge.py
+│   │   ├── 📁 projection/
+│   │   │   ├── 📄 __init__.py
+│   │   │   ├── 📄 _projection_core.py
+│   │   │   ├── 📄 external_projection.py
+│   │   │   ├── 📄 identity_projection.py
+│   │   │   └── 📄 query_projection.py
+│   │   ├── 📁 runtime/
+│   │   │   ├── 📄 __init__.py
+│   │   │   └── 📄 runtime_controller.py
+│   │   ├── 📁 store/
+│   │   │   ├── 📄 __init__.py
+│   │   │   ├── 📄 _schema.py
+│   │   │   └── 📄 manifold_store.py
+│   │   ├── 📁 types/
+│   │   │   ├── 📄 __init__.py
+│   │   │   ├── 📄 bindings.py
+│   │   │   ├── 📄 enums.py
+│   │   │   ├── 📄 graph.py
+│   │   │   ├── 📄 ids.py
+│   │   │   ├── 📄 manifests.py
+│   │   │   ├── 📄 provenance.py
+│   │   │   └── 📄 runtime_state.py
+│   │   └── 📄 __init__.py
+│   ├── 📁 utils/
+│   │   ├── 📄 __init__.py
+│   │   ├── 📄 file_utils.py
+│   │   └── 📄 logging_utils.py
+│   ├── 📄 __init__.py
+│   └── 📄 app.py
+├── 📁 tests/
+│   ├── 📄 __init__.py
+│   ├── 📄 test_imports.py
+│   ├── 📄 test_phase10_hardening.py
+│   ├── 📄 test_phase2_types.py
+│   ├── 📄 test_phase3_storage.py
+│   ├── 📄 test_phase4_projection_fusion.py
+│   ├── 📄 test_phase5_scoring.py
+│   ├── 📄 test_phase6_extraction.py
+│   ├── 📄 test_phase7_hydration.py
+│   ├── 📄 test_phase8_model_bridge.py
+│   ├── 📄 test_phase9_pipeline.py
+│   └── 📄 test_scaffold_smoke.py
+├── 📄 .gitignore
+├── 📄 pyproject.toml
+├── 📄 README.md
+└── 📄 requirements.txt
