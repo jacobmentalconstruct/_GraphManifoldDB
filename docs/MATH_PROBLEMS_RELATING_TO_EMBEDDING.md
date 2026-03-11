@@ -1,10 +1,16 @@
+# Deterministic Embedder: Literature Context and Engineering Best Practices
 
-Deterministic Embedder in Context
-Executive summary
+> **Companion document** — mathematical derivation and formal notation are in
+> [`docs/BPE_SVD_WHITEPAPER.md`](BPE_SVD_WHITEPAPER.md). This document covers
+> prior art, comparative analysis, and practical engineering recommendations.
+
+---
+
+## Executive Summary
 
 The “Deterministic Embedder” design (BPE subwords → windowed co‑occurrence → NPMI → PNPMI sparse association matrix → truncated SVD with singular‑value scaling → optional friction graph for traversal) is best understood as a modernized, corpus‑specific instance of count‑based distributional semantics and spectral embedding. This family includes Latent Semantic Analysis/Indexing (LSA/LSI) via SVD on term–document matrices , PPMI/SPPMI + SVD pipelines that explicitly factorize PMI‑derived matrices (and are theoretically tied to word2vec SGNS via shifted PMI factorization) , and graph spectral embeddings such as Laplacian Eigenmaps as well as graph–embedding unifications like NetMF that show DeepWalk/node2vec are also matrix‑factorization views of graph neighborhoods .
 
-Two “industry‑grade” lessons from prior art apply directly to your pipeline:
+Two “industry‑grade” lessons from prior art apply directly to this pipeline:
 
     Sparse‑matrix semantics must match implicit zeros. This is why factorizing PNPMI/PPMI/SPPMI (where “no positive evidence” is truly zero) is canonical for sparse SVD pipelines .
     SVD outputs require variance‑aware scaling and sign canonicalization. Classical LSA uses Σ‑weighted coordinates for meaningful geometry , and modern libraries explicitly handle sign ambiguity (e.g., svd_flip / flip_sign) to ensure deterministic components .
@@ -32,25 +38,25 @@ Predictive embeddings and their explicit‑statistics interpretations
 Baroni et al.’s “Don’t count, predict!” provides a widely cited systematic comparison showing that predictive models often win on benchmarks, but count‑based models can remain highly competitive depending on hyperparameters and tasks.
 Spectral and graph embedding views of co‑occurrence structures
 
-There are two adjacent graph‑based traditions relevant to your “friction graph” concept:
+There are two adjacent graph‑based traditions relevant to the friction graph concept:
 
     Spectral graph embeddings (e.g., Laplacian Eigenmaps) embed nodes so that connected/weighted neighbors stay close, using eigenvectors of Laplacian‑derived matrices.
     Random‑walk/skip‑gram graph embeddings (DeepWalk/node2vec/LINE) treat walks as sentences and learn embeddings via SGNS‑like objectives.
 
-Crucially, NetMF shows these graph‑walk embeddings can be reframed as explicit matrix factorization problems, unifying DeepWalk/LINE/node2vec and connecting them to normalized Laplacian operators. This is directly thematically aligned with your “closed‑form factorization + graph traversal” split: one representation is “factorize for vectors,” another is “use weights for paths.”
+Crucially, NetMF shows these graph‑walk embeddings can be reframed as explicit matrix factorization problems, unifying DeepWalk/LINE/node2vec and connecting them to normalized Laplacian operators. This is directly thematically aligned with the “closed‑form factorization + graph traversal” split in this design: one representation is “factorize for vectors,” another is “use weights for paths.”
 
 Graph‑of‑words approaches (like TextRank) also build co‑occurrence graphs, though typically for ranking rather than embeddings. Recent work on term co‑occurrence networks explicitly converts edge weights to NPMI and then thresholds, reinforcing that NPMI‑weighted co‑occurrence graphs are an established motif.
 Friction/distance‑as‑cost usage patterns
 
 Treating “semantic strength” as a graph weight and then converting it into a path cost is a standard maneuver in weighted graph algorithms: shortest paths minimize the sum of edge costs, so stronger links must correspond to smaller costs. NetworkX’s weighted shortest‑path interfaces encode exactly this model (edge attribute → weight function).
 
-More domain‑specific evidence that your exact move is plausible: a computational linguistics study on semantic relatedness (in the context of a word‑association game) compares NPMI‑based and graph‑path‑based relatedness measures, explicitly noting the convention that “stronger connections belong to smaller path weights.”
+More domain‑specific evidence that this exact approach is plausible: a computational linguistics study on semantic relatedness (in the context of a word‑association game) compares NPMI‑based and graph‑path‑based relatedness measures, explicitly noting the convention that “stronger connections belong to smaller path weights.”
 Comparative analysis against established approaches
 Comparison table
 
-The table below focuses on the dimensions you requested. “Determinism” is separated into (a) determinism given fixed artifacts and (b) determinism of training without extra controls (random seeds, single‑threading, sign flips). “Reversibility” here means the system naturally yields a stable token trace and a direct mapping from vectors back to discrete units.
+The table below covers four key dimensions. “Determinism” is separated into (a) determinism given fixed artifacts and (b) determinism of training without extra controls (random seeds, single‑threading, sign flips). “Reversibility” here means the system naturally yields a stable token trace and a direct mapping from vectors back to discrete units.
 Approach / pattern	Determinism (inference)	Determinism (training)	Offline training & inference	Sparsity handling	Memory / compute profile	Interpretability	Reversibility / token trace	Unseen tokens	Corpus specificity	Integration complexity
-Your design: PNPMI + truncated SVD + friction graph	High (artifact lookup)	High if sign‑canon + fixed solver	Yes	Excellent (sparse matrix)	SVD dominates; scales with nnz·k	High (nearest tokens, inspectable pipeline)	Strong (token_ids + per‑token vectors)	Moderate→High with byte‑level BPE	Very high	Moderate
+This design: PNPMI + truncated SVD + friction graph	High (artifact lookup)	High if sign‑canon + fixed solver	Yes	Excellent (sparse matrix)	SVD dominates; scales with nnz·k	High (nearest tokens, inspectable pipeline)	Strong (token_ids + per‑token vectors)	Moderate→High with byte‑level BPE	Very high	Moderate
 LSA/LSI (TF‑IDF term–doc + SVD)	High	High with sign‑canon	Yes	Excellent	Sparse term–doc; SVD dominates	Medium‑high (“topics”)	Medium (term/doc mapping; no token trace)	Low unless subword	High	Moderate
 PPMI/SPPMI + SVD (word–context)	High	High with sign‑canon	Yes	Excellent	Sparse PMI matrix; SVD dominates	Medium‑high	Medium (word ids; no subword trace)	Low unless subword	High	Moderate
 Hellinger PCA / spectral on probabilities	High	High with sign‑canon	Yes	Moderate (often needs dense-ish ops or careful sparse linear algebra)	PCA/eigs; can be heavy at scale	Medium	Medium	Low unless subword	High	Moderate
@@ -74,15 +80,15 @@ Algorithmic variants and engineering best practices
 This section distills “what to adopt” from the strongest recurring patterns and from how mature libraries do it.
 Matrix construction choices
 
-Positive association matrix for factorization. If you want a sparse matrix where implicit zero means “no positive evidence,” the canonical construction is one of:
+Positive association matrix for factorization. For a sparse matrix where implicit zero means “no positive evidence,” the canonical construction is one of:
 
     PPMI: ( \max(0, \mathrm{PMI}) )
     SPPMI: ( \max(0, \mathrm{PMI} - \log k) ) (explicit SGNS surrogate)
-    PNPMI: ( \max(0, \mathrm{NPMI}) ) (your bounded variant; well-motivated by NPMI properties)
+    PNPMI: ( \max(0, \mathrm{NPMI}) ) (the bounded variant; well-motivated by NPMI properties)
 
-Default recommendation: start with PNPMI if you want bounded scores and interpretability; keep SPPMI as an optional “SGNS‑like” mode if analogy performance or SGNS parity matters. The literature most directly validates SPPMI as an SGNS equivalent ; the literature most directly validates NPMI for bounded association stability is in collocations and coherence measurement .
+Default recommendation: start with PNPMI for bounded scores and interpretability; keep SPPMI as an optional “SGNS‑like” mode if analogy performance or SGNS parity matters. The literature most directly validates SPPMI as an SGNS equivalent ; the literature most directly validates NPMI for bounded association stability is in collocations and coherence measurement .
 
-Minimum count thresholds. Bullinaria & Levy’s empirical work (and many follow‑ons) implicitly support the idea that small windows + positive PMI work best when you remove unstable low‑count events.
+Minimum count thresholds. Bullinaria & Levy’s empirical work (and many follow‑ons) implicitly support the idea that small windows + positive PMI work best when unstable low‑count events are removed.
 Defaults that tend to behave well:
 
     token min frequency: min_token_count ∈ [5, 50] depending on corpus scale
@@ -98,7 +104,7 @@ SVD solver, scaling, and determinism controls
 
 Sparse SVD choices. For sparse matrices, two mature paths dominate:
 
-    SciPy svds (ARPACK/Lobpcg/PROPACK solvers). SciPy explicitly notes singular value order is not guaranteed, so you must sort.
+    SciPy svds (ARPACK/Lobpcg/PROPACK solvers). SciPy explicitly notes singular value order is not guaranteed, so results must be sorted.
     scikit‑learn TruncatedSVD / randomized_svd for scalable randomized methods; flip_sign exists specifically to resolve sign ambiguity deterministically.
 
 Recommendation by corpus scale
@@ -120,7 +126,7 @@ Sign canonicalization. SVD is only unique up to sign flips of singular vectors; 
 Adopt either:
 
     sklearn.utils.extmath.svd_flip(u, v)
-    or your own canonical rule: “make the largest‑magnitude entry in each component positive.”
+    or a custom canonical rule: “make the largest‑magnitude entry in each component positive.”
 
 Pooling, weighting, and sentence/query embeddings
 
@@ -136,7 +142,7 @@ Storage formats and artifact hygiene
 Sparse matrix storage. SciPy’s save_npz/load_npz are the simplest durable format for sparse matrices.
 Use CSR or CSC for efficient multiplication; build in COO then convert to CSR.
 
-Embedding storage. Store embeddings.npy as float32 for inference speed; keep float64 in training if you want greater numerical stability.
+Embedding storage. Store embeddings.npy as float32 for inference speed; keep float64 in training for greater numerical stability.
 
 Metadata. Persist a small metadata.json containing:
 
@@ -150,10 +156,10 @@ Metadata. Persist a small metadata.json containing:
 This is the difference between “deterministic in theory” and “auditable determinism in practice.”
 Tokenization and unseen token strategy
 
-Your BPE choice is well aligned with modern subword practices (BPE in NLP popularized by Sennrich et al.; SentencePiece provides BPE/unigram tooling).
+The BPE tokenization choice is well aligned with modern subword practices (BPE in NLP popularized by Sennrich et al.; SentencePiece provides BPE/unigram tooling).
 
-If you want to virtually eliminate unknown tokens, you can adopt byte‑level BPE (base vocabulary covers 256 byte values) as widely used in modern LLM tokenizers; educational minimal implementations exist.
-If you’d rather not switch tokenizers yet, keep your current BPE but add a deterministic <unk> handling plan (you already do). FastText’s approach demonstrates why subword composition materially improves OOV behavior.
+To virtually eliminate unknown tokens, byte‑level BPE can be adopted (base vocabulary covers 256 byte values), as widely used in modern LLM tokenizers; educational minimal implementations exist.
+If switching tokenizers is not desired, the current BPE with a deterministic `<unk>` handling strategy is sufficient. FastText’s approach demonstrates why subword composition materially improves OOV behavior.
 Reusable implementations and primary references
 Open-source implementations worth reusing or cribbing from
 
@@ -188,8 +194,8 @@ Predictive baselines (for comparison)
 - word2vec code: https://github.com/tmikolov/word2vec
 - fastText code: https://github.com/facebookresearch/fastText
 
-Why these are the right targets: hyperwords and the SPPMI scripts are explicitly aligned with Levy & Goldberg’s SGNS↔SPPMI theory ; scikit‑learn’s flip_sign exists precisely to fix sign ambiguity deterministically ; SciPy’s sparse SVD and sparse save/load are the standard stack for sparse linear algebra artifacts ; SentencePiece and BPE references cover the practical tokenizer side ; NetworkX’s weighted shortest path APIs match your friction‑as‑cost usage .
-Primary sources and canonical surveys to anchor your whitepaper
+Why these are the right targets: hyperwords and the SPPMI scripts are explicitly aligned with Levy & Goldberg’s SGNS↔SPPMI theory ; scikit‑learn’s flip_sign exists precisely to fix sign ambiguity deterministically ; SciPy’s sparse SVD and sparse save/load are the standard stack for sparse linear algebra artifacts ; SentencePiece and BPE references cover the practical tokenizer side ; NetworkX’s weighted shortest path APIs match the friction‑as‑cost usage in this pipeline .
+Primary sources and canonical surveys
 
     LSA/LSI origin: Deerwester et al. (1990).
     Count‑based VSM survey: Turney & Pantel (2010).
@@ -205,7 +211,7 @@ Primary sources and canonical surveys to anchor your whitepaper
 
 Proposed pipeline and whitepaper updates
 
-This section gives you drop‑in replacements for the core math and the surrounding engineering story (what gets factorized vs what becomes a graph cost), plus pseudocode and a migration/test plan.
+This section provides drop‑in replacements for the core math and the surrounding engineering story (what gets factorized vs what becomes a graph cost), plus pseudocode and a migration/test plan.
 Pipeline stage timeline
 
 Training   artifactsBPE   trainingtokenizer.jsonSliding-windowcountingtoken_counts   +pair_countsAssociation   buildPNPMI   (sparse)Spectral   compressionembeddings.npy   +sigma.npyTraversal   viewfriction   edges(optional)Query-time   inferenceEncodetoken_idsLookuptoken_vectorsPoolpooled_vectorNormalizecosine-readyembeddingDeterministic embedder lifecycle
@@ -286,10 +292,10 @@ Apply sign canonicalization after SVD (either via svd_flip or equivalent), becau
 
 A simple canonical rule:
 
-For each component (j), let (r = \arg\max_i |U_{ij}|). If (U_{rj} < 0), multiply column (j) of (U_k) by (-1) (and correspondingly flip (V_k)’s row if you store it).
-Friction graph stage (preserve your traversal concept without poisoning SVD)
+For each component (j), let (r = \arg\max_i |U_{ij}|). If (U_{rj} < 0), multiply column (j) of (U_k) by (-1) (and correspondingly flip the corresponding row of V_k if it is stored).
+Friction graph stage (preserving the traversal concept without poisoning SVD)
 
-Define friction only as a graph cost on edges you choose to keep:
+Define friction only as a graph cost on selected edges:
 
 [ \mathrm{friction}(i,j)=1-A_{ij} \quad\text{for }A_{ij}>0 ]
 
@@ -368,4 +374,4 @@ A short migration plan that keeps the system auditable:
     Pooling upgrade optional tests
         If adding SIF: verify weights and PC removal match Arora et al.’s intended behavior.
 
-These steps bring your pipeline into alignment with the strongest “count‑based + spectral” prior art while preserving your distinctive “friction graph as a traversal view” separation, which parallels broader graph embedding dualities (matrix factorization view vs shortest‑path / neighborhood view).
+These steps bring this pipeline into alignment with the strongest “count‑based + spectral” prior art while preserving the distinctive “friction graph as a traversal view” separation, which parallels broader graph embedding dualities (matrix factorization view vs shortest‑path / neighborhood view).

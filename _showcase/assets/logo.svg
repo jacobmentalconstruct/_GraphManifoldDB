@@ -68,11 +68,11 @@
   <text x="200" y="335" text-anchor="middle"
         font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif"
         font-size="28" font-weight="700" letter-spacing="4"
-        fill="url(#glow)" filter="url(#textGlow)">BPE-SVD</text>
+        fill="url(#glow)" filter="url(#textGlow)">BDVE</text>
 
   <!-- Subtitle -->
   <text x="200" y="362" text-anchor="middle"
         font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif"
         font-size="11" font-weight="400" letter-spacing="3"
-        fill="#8b949e">DETERMINISTIC EMBEDDER</text>
+        fill="#8b949e">DETERMINISTIC VECTOR EMBEDDINGS</text>
 </svg>

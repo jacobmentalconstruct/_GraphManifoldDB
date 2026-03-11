@@ -1,4 +1,4 @@
-"""BPE-SVD Embedder Demo — Command-Line Interface.
+"""BDVE Embedder Demo — Command-Line Interface.
 
 Usage:
     python -m embedder_demo.cli tokenize  "hello world"
@@ -11,9 +11,14 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import io
 import json
 import sys
 from typing import List
+
+# Ensure stdout can handle Unicode tokens (Windows cp1252 fix)
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 from embedder_demo import core
 
@@ -155,6 +160,27 @@ def cmd_reverse(args: argparse.Namespace):
         _dump_json({"note": "reverse results in JSON not yet implemented"})
 
 
+def cmd_train(args: argparse.Namespace):
+    """Train the BDVE model from a text file."""
+    _header("Train")
+
+    _kv("file", args.file)
+    _kv("vocab size", str(args.vocab_size))
+    _kv("dimensions", str(args.dims))
+    print()
+
+    core.train_from_file(
+        args.file,
+        vocab_size=args.vocab_size,
+        embedding_dims=args.dims,
+        on_progress=lambda msg: print(f"  {DIM}{msg}{RESET}"),
+    )
+
+    _kv("artifacts", str(core._ARTIFACTS_DIR))
+    print(f"\n  {GREEN}{BOLD}Training complete.{RESET}")
+    print(f"  {DIM}Pipeline commands now use real embeddings.{RESET}\n")
+
+
 def cmd_pipeline(args: argparse.Namespace):
     """Run the full pipeline: tokenize → chunk → embed → reverse."""
     _header("Full Pipeline")
@@ -200,7 +226,7 @@ def _dump_json(data: dict):
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="embedder_demo",
-        description="BPE-SVD Deterministic Embedder — CLI Demo",
+        description="BDVE — Bidirectional Deterministic Vector Embeddings — CLI Demo",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -214,6 +240,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     def _add_topk(p: argparse.ArgumentParser):
         p.add_argument("--top-k", type=int, default=5, help="Number of nearest tokens (default: 5)")
+
+    # train
+    p_train = sub.add_parser("train", help="Train BDVE model from a text file")
+    p_train.add_argument("file", help="Path to a .txt file to train on")
+    p_train.add_argument("--vocab-size", type=int, default=2000, help="BPE vocabulary size (default: 2000)")
+    p_train.add_argument("--dims", type=int, default=64, help="Embedding dimensions (default: 64)")
 
     # tokenize
     p_tok = sub.add_parser("tokenize", help="Text → BPE tokens")
@@ -250,7 +282,11 @@ def main():
     parser = build_parser()
     args = parser.parse_args()
 
+    # Auto-load previously trained model if artifacts exist
+    core.load_if_available()
+
     dispatch = {
+        "train": cmd_train,
         "tokenize": cmd_tokenize,
         "chunk": cmd_chunk,
         "embed": cmd_embed,

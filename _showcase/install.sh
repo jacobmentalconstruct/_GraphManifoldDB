@@ -3,7 +3,7 @@ set -euo pipefail
 
 echo ""
 echo " ============================================"
-echo "  BPE-SVD Embedder Demo — Environment Setup"
+echo "  BDVE Embedder Demo — Environment Setup"
 echo " ============================================"
 echo ""
 
@@ -30,17 +30,17 @@ echo " [2/3] Installing dependencies..."
 source .venv/bin/activate
 pip install -r requirements.txt --quiet
 
-# Vendor the bpe_svd package (inference + training) into this venv.
-# The showcase stubs (core.py) do NOT import from it yet — this just
-# makes the package available so wiring it up requires no reinstall.
-pip install -e ../packages/bpe_svd --quiet || \
+# Install the bpe_svd package with training extras (inference + training).
+# The [training] extra includes scipy for the SVD compression step.
+pip install -e "../packages/bpe_svd[training]" --quiet || \
     echo " [WARN] Could not install bpe_svd package. Demo stubs will still work."
 echo "       Done."
 
 echo " [3/3] Verifying installation..."
 python -c "import numpy; print(f'       numpy {numpy.__version__}')"
+python -c "import scipy; print(f'       scipy {scipy.__version__}')"
 python -c "import tkinter; print('       tkinter OK')"
-python -c "import bpe_svd; print(f'       bpe_svd {bpe_svd.__version__} (vendored)')" 2>/dev/null || \
+python -c "import bpe_svd; print(f'       bpe_svd {bpe_svd.__version__}')" 2>/dev/null || \
     echo "       bpe_svd not installed (optional)"
 
 echo ""

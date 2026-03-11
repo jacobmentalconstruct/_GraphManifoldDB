@@ -1,1 +1,1 @@
-"""BPE-SVD Deterministic Embedder — Interactive Demo."""
+"""BDVE — Bidirectional Deterministic Vector Embeddings — Interactive Demo."""

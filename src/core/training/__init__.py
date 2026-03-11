@@ -19,13 +19,15 @@ the artifact files on disk.
 
 from src.core.training.bpe_trainer import BPETrainer
 from src.core.training.cooccurrence import compute_counts, sliding_window_cooccurrence
-from src.core.training.npmi_matrix import build_npmi_matrix
-from src.core.training.spectral import compute_embeddings
+from src.core.training.npmi_matrix import build_npmi_matrix, export_association_matrix_to_json
+from src.core.training.spectral import compute_embeddings, export_embeddings_to_json
 
 __all__ = [
     "BPETrainer",
     "compute_counts",
     "sliding_window_cooccurrence",
     "build_npmi_matrix",
+    "export_association_matrix_to_json",
     "compute_embeddings",
+    "export_embeddings_to_json",
 ]

@@ -1,4 +1,4 @@
-"""BPE-SVD Embedder Demo — Graphical Interface.
+"""BDVE Embedder Demo — Graphical Interface.
 
 Launch with:  python -m embedder_demo.ui
 """
@@ -6,8 +6,9 @@ Launch with:  python -m embedder_demo.ui
 from __future__ import annotations
 
 import math
+import threading
 import tkinter as tk
-from tkinter import ttk
+from tkinter import filedialog, ttk
 from typing import List
 
 from embedder_demo import core
@@ -30,7 +31,7 @@ BORDER = "#30363d"
 # =====================================================================
 
 class SplashScreen(tk.Toplevel):
-    """Borderless loading popup that draws the BPE-SVD logo on a canvas."""
+    """Borderless loading popup that draws the BDVE logo on a canvas."""
 
     WIDTH = 380
     HEIGHT = 400
@@ -105,14 +106,14 @@ class SplashScreen(tk.Toplevel):
         # Title text
         c.create_text(
             cx, 290,
-            text="BPE-SVD",
+            text="BDVE",
             font=("Segoe UI", 28, "bold"),
             fill=ACCENT_BLUE,
         )
         c.create_text(
             cx, 322,
-            text="DETERMINISTIC EMBEDDER",
-            font=("Segoe UI", 10),
+            text="DETERMINISTIC VECTOR EMBEDDINGS",
+            font=("Segoe UI", 9),
             fill=FG_DIM,
         )
 
@@ -144,7 +145,7 @@ class MainWindow(tk.Tk):
 
     def __init__(self):
         super().__init__()
-        self.title("BPE-SVD Embedder Demo")
+        self.title("BDVE Embedder Demo")
         self.configure(bg=BG_DARK)
         self.minsize(900, 620)
         self._center(1000, 700)
@@ -160,6 +161,11 @@ class MainWindow(tk.Tk):
         self._build_input_panel()
         self._build_results_panel()
         self._build_statusbar()
+
+        # Auto-load previously trained model if artifacts exist
+        if core.load_if_available():
+            self._model_indicator.config(text="● Model ready", fg=ACCENT_GREEN)
+            self._set_status("Model loaded from saved artifacts — ready.")
 
     # ── geometry ─────────────────────────────────────────────────────
 
@@ -240,11 +246,32 @@ class MainWindow(tk.Tk):
         bar.pack(fill=tk.X, padx=0, pady=(0, 1))
 
         ttk.Label(
-            bar, text="  BPE-SVD  ",
+            bar, text="  BDVE  ",
             font=("Segoe UI", 12, "bold"),
             foreground=ACCENT_BLUE,
             background=BG_PANEL,
         ).pack(side=tk.LEFT, padx=(8, 16))
+
+        # Train from File button (prominent)
+        ttk.Button(
+            bar, text="Train from File", command=self._on_train,
+            style="Accent.TButton",
+        ).pack(side=tk.LEFT, padx=(0, 8), pady=4)
+
+        # Model status indicator
+        self._model_indicator = tk.Label(
+            bar,
+            text="● No model",
+            font=("Segoe UI", 9),
+            fg=FG_DIM,
+            bg=BG_PANEL,
+        )
+        self._model_indicator.pack(side=tk.LEFT, padx=(0, 16))
+
+        # Separator
+        tk.Frame(bar, bg=BORDER, width=1).pack(
+            side=tk.LEFT, fill=tk.Y, padx=4, pady=6,
+        )
 
         actions = [
             ("Tokenize", self._on_tokenize),
@@ -633,6 +660,43 @@ class MainWindow(tk.Tk):
         self._set_status(
             f"Reversed: {len(self._reverse_results)} vectors"
         )
+
+    # ── training handler ─────────────────────────────────────────────
+
+    def _on_train(self):
+        """Open file picker and train the BDVE model in a background thread."""
+        path = filedialog.askopenfilename(
+            title="Select training file",
+            filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
+        )
+        if not path:
+            return
+
+        self._set_status("Training...")
+        self._model_indicator.config(text="● Training...", fg="#e3b341")
+
+        def _run():
+            try:
+                core.train_from_file(
+                    path,
+                    on_progress=lambda msg: self.after(0, self._set_status, msg),
+                )
+                self.after(0, self._training_complete)
+            except Exception as e:
+                self.after(0, self._set_status, f"Training failed: {e}")
+                self.after(
+                    0,
+                    lambda: self._model_indicator.config(
+                        text="● Error", fg="#da3633",
+                    ),
+                )
+
+        threading.Thread(target=_run, daemon=True).start()
+
+    def _training_complete(self):
+        """Called on the main thread when training finishes successfully."""
+        self._model_indicator.config(text="● Model ready", fg=ACCENT_GREEN)
+        self._set_status("Training complete — model ready. Run the pipeline!")
 
     def _on_clear(self):
         """Clear all results from the display."""

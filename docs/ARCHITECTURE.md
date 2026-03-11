@@ -19,8 +19,8 @@ Every manifold stores the same structural collections:
 - **Provenance** — lineage records tracing every element to its origin, transformation stage, and upstream dependencies
 
 No manifold has a special schema. No manifold gets extra fields. The
-architectural invariant is: if you can traverse one manifold, you can traverse
-any manifold with the same code.
+architectural invariant is: traversal logic written for one manifold works
+identically against any other manifold.
 
 ### Manifold Roles
 

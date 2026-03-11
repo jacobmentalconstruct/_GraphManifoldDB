@@ -2,9 +2,9 @@
 
 ## Core Principle
 
-The legacy project is **source material only**. We never transplant whole
-scripts. We extract narrow, well-bounded units and re-home them under correct
-ownership in the new scaffold.
+The legacy project is **source material only**. Whole scripts are never
+transplanted. Only narrow, well-bounded units are extracted and re-homed under
+correct ownership in the new scaffold.
 
 ## What May Be Extracted (One at a Time)
 

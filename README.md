@@ -442,6 +442,7 @@ external services. Everything else is local computation over local data structur
 | Document | Description |
 |----------|-------------|
 | [`docs/BPE_SVD_WHITEPAPER.md`](docs/BPE_SVD_WHITEPAPER.md) | **Formal mathematical blueprint** — complete derivation of the BPE-SVD embedding pipeline with proper notation |
+| [`docs/MATH_PROBLEMS_RELATING_TO_EMBEDDING.md`](docs/MATH_PROBLEMS_RELATING_TO_EMBEDDING.md) | Prior art survey, comparative analysis, and engineering best practices for the embedding pipeline |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | System design, processing flow, module layout, dependency map |
 | [`docs/DEVLOG.md`](docs/DEVLOG.md) | Chronological record of each implementation phase |
 | [`docs/SYSTEM_MAP.md`](docs/SYSTEM_MAP.md) | Living map of system ownership and module boundaries |

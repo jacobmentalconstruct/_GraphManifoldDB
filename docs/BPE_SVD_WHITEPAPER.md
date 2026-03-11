@@ -24,7 +24,7 @@ and truncated Singular Value Decomposition (SVD) for dimensionality reduction.
 The resulting embeddings are **fully deterministic** (same input always produces
 identical output), **fully transparent** (every step is inspectable), **fully
 reversible** (a pooled vector can be mapped back to its nearest tokens), and
-**corpus-specific** (trained on your data, not a general web crawl).
+**corpus-specific** (trained on the target corpus, not a general web crawl).
 
 ---
 
@@ -202,13 +202,13 @@ captures, but without any neural network.
 
 Raw co-occurrence counts are dominated by high-frequency tokens. The token
 `the` co-occurs with nearly everything, not because it's semantically related
-to everything, but because it's ubiquitous. We need a measure that asks:
+to everything, but because it's ubiquitous. A better measure asks:
 "Do these two tokens co-occur **more than chance predicts**?"
 
 ### Pointwise Mutual Information (PMI)
 
 PMI measures the ratio between a pair's observed co-occurrence probability
-and what we'd expect if the tokens were independent:
+and what would be expected if the tokens were independent:
 
 ```
 PMI(a, b) = log₂( P(a,b) / (P(a) · P(b)) )
@@ -260,7 +260,7 @@ in both cases: "these tokens co-occur substantially more than chance predicts."
 ### From Association to Distance
 
 NPMI gives us a measure of association strength. But for graph traversal and
-embedding purposes, we want a measure of **distance** — how far apart are
+embedding purposes, a measure of **distance** is needed — how far apart are
 two tokens in semantic space?
 
 The friction transformation inverts the semantic signal:
@@ -286,10 +286,10 @@ F[i, j] = 0                             if never observed
 ### Why "Friction"?
 
 This term comes from the original design insight that motivated the system.
-The creator (Jacob Lambert) independently conceived that if you build a graph of
-token relationships and treat high-frequency connections as **resistance**
-(friction), then pathfinding through the graph naturally routes around generic
-connectors (like `the`, `ing`) toward semantically meaningful connections.
+The original design insight: if a graph of token relationships treats
+high-frequency connections as **resistance** (friction), then pathfinding
+through the graph naturally routes around generic connectors (like `the`, `ing`)
+toward semantically meaningful connections.
 
 This intuition maps precisely onto the NPMI construction:
 
@@ -327,7 +327,7 @@ Where:
 
 ### Truncated SVD
 
-We keep only the top k singular values and their corresponding vectors:
+Only the top k singular values and their corresponding vectors are retained:
 
 ```
 M ≈ U_k · Σ_k · V_k^T
@@ -434,7 +434,7 @@ This simplifies downstream scoring to a single dot product.
 
 A unique property of this embedding system is that the vector space is
 **interpretable**. Because each row of the embedding matrix corresponds to a
-known token, we can find which tokens are nearest to any point in the space.
+known token, the nearest tokens to any point in the space can be determined.
 
 Neural embedding models cannot do this — their vector spaces are entangled
 by billions of learned parameters with no clean mapping back to vocabulary items.
@@ -516,19 +516,20 @@ structure-only scoring.
 **Deerwester et al., 1990**
 
 LSA applies SVD to a term-document matrix (typically TF-IDF weighted).
-Our approach differs in three ways:
+This pipeline differs from LSA in three ways:
 
-1. **Tokenization:** LSA uses whole words or stems. We use BPE subwords,
-   which handles novel words gracefully by composing them from known pieces.
+1. **Tokenization:** LSA uses whole words or stems. BPE subwords are used
+   here, which handles novel words gracefully by composing them from known
+   pieces.
 
 2. **Co-occurrence matrix:** LSA builds a term-document matrix (rows = words,
-   columns = documents). We build a token-token co-occurrence matrix with
-   windowed counts, which captures local context rather than document-level
-   co-presence.
+   columns = documents). This pipeline builds a token-token co-occurrence
+   matrix with windowed counts, capturing local context rather than
+   document-level co-presence.
 
-3. **Normalization:** LSA typically uses TF-IDF. We use NPMI, which provides
-   a bounded [-1, +1] measure that properly accounts for base rates of both
-   tokens in a pair.
+3. **Normalization:** LSA typically uses TF-IDF. NPMI is used here, which
+   provides a bounded [-1, +1] measure that properly accounts for base rates
+   of both tokens in a pair.
 
 ### Word2Vec (Skip-gram with Negative Sampling)
 
@@ -539,31 +540,31 @@ target word (or vice versa). Levy & Goldberg (2014) showed that skip-gram
 with negative sampling implicitly factorizes a PMI matrix shifted by
 log(k), where k is the number of negative samples.
 
-Our approach makes this factorization **explicit**: we directly compute
-NPMI and decompose it via SVD. The result is mathematically related to what
-Word2Vec learns, but without any stochastic gradient descent, random
-initialization, or training hyperparameter sensitivity.
+This pipeline makes the factorization **explicit**: NPMI is computed directly
+and decomposed via SVD. The result is mathematically related to what Word2Vec
+learns, but without any stochastic gradient descent, random initialization,
+or training hyperparameter sensitivity.
 
 ### GloVe
 
 **Pennington et al., 2014**
 
 GloVe explicitly constructs a co-occurrence matrix and learns embeddings
-by factorizing it. The key difference from our approach:
+by factorizing it. The key differences from this pipeline:
 
 1. GloVe uses a weighted least squares objective with a custom weighting
-   function. We use NPMI normalization + truncated SVD — a closed-form
-   solution with no iterative optimization.
+   function. This pipeline uses NPMI normalization + truncated SVD — a
+   closed-form solution with no iterative optimization.
 
-2. GloVe learns both word vectors and context vectors. We take only the
-   left singular vectors (U_k).
+2. GloVe learns both word vectors and context vectors. Only the left
+   singular vectors (U_k) are used here.
 
 ### The Novel Contribution
 
 The specific combination in this pipeline — **BPE subword tokenization +
 windowed co-occurrence + NPMI normalization + friction interpretation +
-truncated SVD** — is, to our knowledge, not described as an integrated
-system in the existing literature. Each component is well-understood
+truncated SVD** — is not described as an integrated system in the existing
+literature, to the authors' knowledge. Each component is well-understood
 individually, but their composition produces a system with unique properties:
 
 - **Subword granularity** with **statistical normalization** (most SVD-based
