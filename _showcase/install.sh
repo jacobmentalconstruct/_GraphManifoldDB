@@ -28,6 +28,10 @@ fi
 # Activate and install dependencies
 echo " [2/3] Installing dependencies..."
 source .venv/bin/activate
+
+# Upgrade pip and setuptools first to avoid build-backend issues
+python -m pip install --upgrade pip setuptools wheel --quiet
+
 pip install -r requirements.txt --quiet
 
 # Install the bpe_svd package with training extras (inference + training).

@@ -23,8 +23,9 @@ import subprocess
 import sys
 import tempfile
 import threading
+import shutil
 import tkinter as tk
-from tkinter import ttk, scrolledtext
+from tkinter import filedialog, ttk, scrolledtext
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -749,6 +750,9 @@ class DiagnosticUI:
         btn_frame = ttk.Frame(controls)
         btn_frame.pack(fill=tk.X, pady=(0, 4))
 
+        ttk.Button(btn_frame, text="Train from File", style="Run.TButton",
+                   command=self._embed_train_from_file).pack(
+                       side=tk.LEFT, padx=(0, 6))
         ttk.Button(btn_frame, text="Load Artifacts",
                    command=self._embed_load_artifacts).pack(
                        side=tk.LEFT, padx=(0, 6))
@@ -841,6 +845,182 @@ class DiagnosticUI:
             self._embed_forward.delete("1.0", tk.END)
             self._embed_results.delete("1.0", tk.END)
         self.root.after(0, _do)
+
+    def _embed_train_from_file(self) -> None:
+        """Open file picker, train BPE-SVD pipeline, and load the resulting artifacts."""
+        path = filedialog.askopenfilename(
+            title="Select training file",
+            filetypes=[("Text files", "*.txt"), ("All files", "*.*")],
+        )
+        if not path:
+            return
+
+        self._embed_clear_panes()
+        self._embed_status_var.set("Training...")
+        self.status_var.set(f"Training on: {Path(path).name}")
+
+        def worker():
+            try:
+                import numpy as np
+                from src.core.training.bpe_trainer import BPETrainer
+                from src.core.training.cooccurrence import compute_counts
+                from src.core.training.npmi_matrix import build_npmi_matrix
+                from src.core.training.spectral import compute_embeddings
+
+                src_file = Path(path)
+                if not src_file.is_file():
+                    raise FileNotFoundError(f"File not found: {path}")
+
+                vocab_size = 2000
+                embedding_dims = 64
+                window_size = 5
+
+                # Step 1: Copy file to temp directory (BPETrainer needs a dir)
+                self._embed_append_forward("TRAINING PIPELINE\n", "heading")
+                self._embed_append_forward("=" * 40 + "\n\n", "dim")
+
+                tmp_dir = tempfile.mkdtemp(prefix="mdg_train_")
+                try:
+                    dest = Path(tmp_dir) / src_file.name
+                    if not dest.suffix.lower() == ".txt":
+                        dest = dest.with_suffix(".txt")
+                    shutil.copy2(str(src_file), str(dest))
+
+                    # Step 2: Train BPE tokenizer
+                    self._embed_append_forward("Step 1: BPE Tokenizer\n", "section")
+                    trainer = BPETrainer(vocab_size=vocab_size)
+                    trainer.train(tmp_dir)
+
+                    artifacts_dir = Path(tempfile.mkdtemp(prefix="mdg_artifacts_"))
+                    tok_path = artifacts_dir / "tokenizer.json"
+                    emb_path = artifacts_dir / "embeddings.npy"
+                    trainer.save(str(tok_path))
+
+                    vocab = trainer.vocab
+                    merges = trainer.merges
+                    eow = trainer.end_of_word
+
+                    self._embed_append_forward(
+                        f"  vocab: {len(vocab)} symbols, "
+                        f"{len(merges)} merges\n", "info")
+
+                    # Step 3: Encode corpus into token streams
+                    self._embed_append_forward(
+                        "\nStep 2: Encode Corpus\n", "section")
+
+                    with open(str(src_file), "r", encoding="utf-8",
+                              errors="ignore") as f:
+                        corpus_text = f.read()
+
+                    token_streams: List[List[int]] = []
+                    for line in corpus_text.splitlines():
+                        line = line.strip()
+                        if line:
+                            ids: List[int] = []
+                            for word in line.split():
+                                symbols: List[str] = list(word) + [eow]
+                                for a, b in merges:
+                                    merged = a + b
+                                    i = 0
+                                    new: List[str] = []
+                                    while i < len(symbols):
+                                        if (i < len(symbols) - 1
+                                                and symbols[i] == a
+                                                and symbols[i + 1] == b):
+                                            new.append(merged)
+                                            i += 2
+                                        else:
+                                            new.append(symbols[i])
+                                            i += 1
+                                    symbols = new
+                                for sym in symbols:
+                                    ids.append(vocab.get(sym, -1))
+                            if ids:
+                                token_streams.append(ids)
+
+                    total_tokens = sum(len(s) for s in token_streams)
+                    self._embed_append_forward(
+                        f"  {total_tokens} tokens in "
+                        f"{len(token_streams)} lines\n", "info")
+
+                    if not token_streams:
+                        raise ValueError(
+                            "Corpus produced no tokens — file may be empty.")
+
+                    # Step 4: Co-occurrence counting
+                    self._embed_append_forward(
+                        "\nStep 3: Co-occurrence\n", "section")
+                    pair_counts, token_counts = compute_counts(
+                        token_streams, window_size=window_size)
+                    self._embed_append_forward(
+                        f"  {len(pair_counts)} pairs observed\n", "info")
+
+                    # Step 5: NPMI association matrix
+                    self._embed_append_forward(
+                        "\nStep 4: NPMI Matrix\n", "section")
+                    npmi_mat = build_npmi_matrix(
+                        pair_counts, token_counts, len(vocab))
+                    self._embed_append_forward(
+                        f"  {npmi_mat.shape[0]}\u00d7{npmi_mat.shape[1]}, "
+                        f"{npmi_mat.nnz} nonzero\n", "info")
+
+                    # Step 6: SVD compression
+                    effective_dims = min(embedding_dims, len(vocab) - 1)
+                    if effective_dims < 1:
+                        raise ValueError(
+                            f"Vocabulary too small ({len(vocab)}) for SVD.")
+                    self._embed_append_forward(
+                        f"\nStep 5: SVD ({effective_dims}d)\n", "section")
+                    emb_matrix = compute_embeddings(npmi_mat, k=effective_dims)
+                    self._embed_append_forward(
+                        f"  {emb_matrix.shape[0]} tokens \u00d7 "
+                        f"{emb_matrix.shape[1]} dims\n", "info")
+
+                    # Step 7: Save artifacts
+                    np.save(str(emb_path), emb_matrix)
+
+                    self._embed_append_forward(
+                        f"\nArtifacts saved to:\n", "section")
+                    self._embed_append_forward(
+                        f"  {tok_path}\n  {emb_path}\n", "dim")
+
+                    # Step 8: Load provider
+                    def _finish():
+                        self._tok_path_var.set(str(tok_path))
+                        self._emb_path_var.set(str(emb_path))
+                        self._embed_load_artifacts()
+                        self.status_var.set("Training complete — model ready")
+                    self.root.after(0, _finish)
+
+                    # Right pane: summary
+                    self._embed_append_results(
+                        "TRAINING COMPLETE\n", "heading")
+                    self._embed_append_results("=" * 40 + "\n\n", "dim")
+                    self._embed_append_results(
+                        f"File:       {src_file.name}\n", "info")
+                    self._embed_append_results(
+                        f"Vocab:      {len(vocab)} symbols\n", "info")
+                    self._embed_append_results(
+                        f"Merges:     {len(merges)}\n", "info")
+                    self._embed_append_results(
+                        f"Pairs:      {len(pair_counts)}\n", "info")
+                    self._embed_append_results(
+                        f"Dimensions: {effective_dims}\n", "info")
+                    self._embed_append_results(
+                        f"\nReady to tokenize and embed.\n", "dim")
+
+                finally:
+                    shutil.rmtree(tmp_dir, ignore_errors=True)
+
+            except Exception as exc:
+                self._embed_append_forward(f"\nERROR: {exc}\n", "error")
+                def _err():
+                    self._embed_status_var.set(f"Training failed: {exc}")
+                    self.status_var.set(f"Training failed: {exc}")
+                self.root.after(0, _err)
+
+        thread = threading.Thread(target=worker, daemon=True)
+        thread.start()
 
     def _embed_generate_demo(self) -> None:
         """Generate tiny demo artifacts in a temp directory and load them."""

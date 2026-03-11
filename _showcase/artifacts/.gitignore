@@ -1,4 +1,0 @@
-# Trained model artifacts — created by the demo's training pipeline.
-# These are machine-specific and should not be committed.
-*.npy
-*.json
