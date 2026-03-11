@@ -32,7 +32,8 @@ Design constraints:
 # Extracted from: _STUFF-TO-INTEGRATE/deterministic_embedder/inference_engine.py :: DeterministicEmbedder
 # Scope: BPE encoding (_encode_word, _encode) + vector lookup + mean pooling
 # Rewritten per EXTRACTION_RULES.md — not verbatim copy
-# Training pipeline (tokenizer, co-occurrence, PMI, SVD) is separate
+# Training pipeline (tokenizer, co-occurrence, NPMI, SVD) → src/core/training/
+# Standalone distributable package → packages/bpe_svd/
 """
 
 from __future__ import annotations

@@ -75,6 +75,12 @@ SCAFFOLD_MODULES = [
     "src.core.model_bridge",
     "src.core.model_bridge.model_bridge",
     "src.core.model_bridge.deterministic_provider",
+    # Training pipeline
+    "src.core.training",
+    "src.core.training.bpe_trainer",
+    "src.core.training.cooccurrence",
+    "src.core.training.npmi_matrix",
+    "src.core.training.spectral",
     # Runtime
     "src.core.runtime",
     "src.core.runtime.runtime_controller",
