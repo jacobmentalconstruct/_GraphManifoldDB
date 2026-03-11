@@ -1,4 +1,4 @@
-Y## 1. Ingest is a translation into relational dimensions
+## 1. Ingest is a translation into relational dimensions
 
 You start with some source form:
 

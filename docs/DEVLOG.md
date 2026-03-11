@@ -315,3 +315,33 @@ Chronological record of each implementation phase, what was built, and key decis
 - `tests/test_phase11_query_embedding.py` (NEW) — 29 tests across 7 test classes
 
 **Result**: 445/445 tests passing (416 existing + 29 new Phase 11 tests)
+
+---
+
+## Phase 12 — Deterministic Embedding Backend
+
+**Goal**: Wire a local deterministic BPE-SVD embedding provider behind `ModelBridge` as the default embedding backend. Users can choose between deterministic (offline, local vector lookup from pre-trained artifacts) and Ollama (HTTP, neural). Deterministic is preferred when artifacts exist; Ollama is the fallback. The training pipeline (tokenizer, co-occurrence, PMI, SVD) that produces the artifacts is NOT part of this deliverable — inference only.
+
+**Source material**: `_STUFF-TO-INTEGRATE/deterministic_embedder/inference_engine.py :: DeterministicEmbedder`. Extracted per EXTRACTION_RULES.md — rewritten, not verbatim.
+
+**What was built**:
+- **deterministic_provider.py** (NEW): `DeterministicEmbedProvider` class — loads BPE tokenizer (JSON) and pre-trained embedding matrix (.npy), encodes text via BPE into token IDs, looks up corresponding rows in the embedding matrix, mean-pools token vectors into a single pooled vector per text. Returns `DeterministicEmbedResult` with pooled vectors, dimensions, token counts, and per-text token-level artifacts (token_ids for verbatim grounding).
+- **model_bridge.py** (MODIFIED): `ModelBridgeConfig` extended with `embed_backend`, `deterministic_tokenizer_path`, `deterministic_embeddings_path`. `ModelBridge` gained backend routing (`_resolve_embed_backend`), lazy provider construction (`_get_deterministic_provider`), and deterministic embed path (`_embed_deterministic`). `embed()` routes to deterministic first, falls back to Ollama on failure. `get_model_identity()` reports embed_backend in properties.
+- **test_phase12_deterministic_embed.py** (NEW): Tests across 10 test classes covering provider isolation, config fields, backend routing, deterministic embed path, Ollama embed path, fallback chain, lazy import, model identity, and end-to-end integration through QueryProjection.
+
+**Key decisions**:
+- **Provider-behind-bridge pattern**: `DeterministicEmbedProvider` is an internal implementation detail of `ModelBridge`. No new contract types, no new ABC methods. The existing `ModelBridgeContract.embed()` signature is unchanged.
+- **Lazy numpy import**: numpy is imported only inside `_load_embeddings()` and `_embed_single()` in the provider, never at module level. `model_bridge.py` has zero numpy dependency. Environments without numpy can still import and use the Ollama path.
+- **Empty string defaults for artifact paths**: Deterministic backend activates only when `embed_backend == "deterministic"` AND both paths are non-empty AND both files exist on disk. Otherwise falls back to Ollama. No convention paths, no auto-discovery — corpus-specific artifacts are configured explicitly.
+- **Fallback chain**: deterministic -> Ollama -> error. If deterministic provider fails (missing artifacts, corrupted files, import error), the bridge logs a warning and transparently falls back to Ollama. If both fail, the error propagates to the caller (caught by QueryProjection's embed_fn error handler for graceful degradation to structural-only gravity).
+- **No numpy types leak**: All numpy arrays converted to plain Python lists via `.tolist()` before leaving the provider. `EmbedResponse` contains only stdlib types.
+- **model field**: Deterministic embed responses report `model="deterministic-bpe-svd"` to distinguish from Ollama responses.
+- **Token artifacts**: Carried in `EmbedResponse.properties["token_artifacts"]` — list of per-text `{"token_ids": List[int]}` for verbatim grounding and traceability.
+
+**Files changed**:
+- `src/core/model_bridge/deterministic_provider.py` (NEW)
+- `src/core/model_bridge/model_bridge.py` (MODIFIED)
+- `tests/test_phase12_deterministic_embed.py` (NEW)
+- `tests/test_imports.py` (MODIFIED — added deterministic_provider import check)
+- `src/adapters/legacy_source_notes.md` (MODIFIED — extraction record)
+- `requirements.txt` (MODIFIED — added numpy>=1.24.0)

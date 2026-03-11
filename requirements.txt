@@ -1,2 +1,5 @@
 # Phase 1: Scaffold only — no heavy dependencies
 # Future phases will add targeted dependencies as logic is extracted
+
+# Deterministic embedding backend (optional — required only for local BPE-SVD embeddings)
+numpy>=1.24.0

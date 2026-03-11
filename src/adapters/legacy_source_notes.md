@@ -23,3 +23,4 @@ C:\Users\jacob\Documents\_UsefulHelperSCRIPTS\_DeterministicGraphRAG
 | Date | Legacy Source File | Function/Class | Target Module | Notes |
 |------|-------------------|----------------|---------------|-------|
 | — | — | — | — | No extractions yet (Phase 1 is scaffold only) |
+| Phase 12 | `_STUFF-TO-INTEGRATE/deterministic_embedder/inference_engine.py` | `DeterministicEmbedder` (BPE encoding + vector lookup + mean pooling) | `src/core/model_bridge/deterministic_provider.py` | Inference-side only. Rewritten per EXTRACTION_RULES.md. Training pipeline (tokenizer, co-occurrence, PMI, SVD) is separate. |

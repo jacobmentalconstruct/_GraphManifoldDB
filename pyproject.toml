@@ -8,6 +8,9 @@ version = "0.1.0"
 description = "Deterministic graph-native manifold system for structured knowledge retrieval"
 requires-python = ">=3.11"
 license = {text = "MIT"}
+dependencies = [
+    "numpy>=1.24.0",
+]
 
 [tool.setuptools.packages.find]
 where = ["."]

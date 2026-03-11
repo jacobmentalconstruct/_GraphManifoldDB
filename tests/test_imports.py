@@ -74,6 +74,7 @@ SCAFFOLD_MODULES = [
     # Model Bridge
     "src.core.model_bridge",
     "src.core.model_bridge.model_bridge",
+    "src.core.model_bridge.deterministic_provider",
     # Runtime
     "src.core.runtime",
     "src.core.runtime.runtime_controller",

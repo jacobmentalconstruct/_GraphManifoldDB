@@ -21,6 +21,7 @@ import inspect
 import os
 import subprocess
 import sys
+import tempfile
 import threading
 import tkinter as tk
 from tkinter import ttk, scrolledtext
@@ -90,6 +91,7 @@ CORE_PACKAGES = [
     "src.core.extraction.extractor",
     "src.core.hydration.hydrator",
     "src.core.model_bridge.model_bridge",
+    "src.core.model_bridge.deterministic_provider",
     "src.core.projection.query_projection",
     "src.core.projection.identity_projection",
     "src.core.projection.external_projection",
@@ -216,6 +218,7 @@ class DiagnosticUI:
         self._build_notebook()
         self._build_test_runner_tab()
         self._build_api_explorer_tab()
+        self._build_embedder_tab()
 
     def _setup_styles(self) -> None:
         """Configure ttk styles for dark theme."""
@@ -711,6 +714,343 @@ class DiagnosticUI:
                     self.api_detail.insert(
                         tk.END, f"\n    {first_line}", "doc")
                 self.api_detail.insert(tk.END, "\n")
+
+    # -----------------------------------------------------------------------
+    # Tab 3: Embedder
+    # -----------------------------------------------------------------------
+
+    def _build_embedder_tab(self) -> None:
+        """Build the embedder/tokenizer diagnostic tab."""
+        tab = ttk.Frame(self.notebook)
+        self.notebook.add(tab, text=" Embedder ")
+
+        # Provider state
+        self._embed_provider = None
+
+        # === Controls frame (top) ===
+        controls = ttk.Frame(tab)
+        controls.pack(fill=tk.X, padx=8, pady=6)
+
+        # Row 1: Artifact paths
+        path_frame = ttk.Frame(controls)
+        path_frame.pack(fill=tk.X, pady=(0, 4))
+
+        ttk.Label(path_frame, text="Tokenizer:").pack(side=tk.LEFT)
+        self._tok_path_var = tk.StringVar()
+        ttk.Entry(path_frame, textvariable=self._tok_path_var,
+                  width=40, font=("Consolas", 9)).pack(side=tk.LEFT, padx=(4, 8))
+
+        ttk.Label(path_frame, text="Embeddings:").pack(side=tk.LEFT)
+        self._emb_path_var = tk.StringVar()
+        ttk.Entry(path_frame, textvariable=self._emb_path_var,
+                  width=40, font=("Consolas", 9)).pack(side=tk.LEFT, padx=(4, 8))
+
+        # Row 2: Action buttons + status
+        btn_frame = ttk.Frame(controls)
+        btn_frame.pack(fill=tk.X, pady=(0, 4))
+
+        ttk.Button(btn_frame, text="Load Artifacts",
+                   command=self._embed_load_artifacts).pack(
+                       side=tk.LEFT, padx=(0, 6))
+        ttk.Button(btn_frame, text="Generate Demo",
+                   command=self._embed_generate_demo).pack(
+                       side=tk.LEFT, padx=(0, 6))
+
+        self._embed_status_var = tk.StringVar(value="No artifacts loaded")
+        ttk.Label(btn_frame, textvariable=self._embed_status_var,
+                  style="Dim.TLabel").pack(side=tk.LEFT, padx=(12, 0))
+
+        # Row 3: Input + Tokenize / Embed buttons
+        input_frame = ttk.Frame(controls)
+        input_frame.pack(fill=tk.X)
+
+        ttk.Label(input_frame, text="Input:").pack(side=tk.LEFT)
+        self._embed_input_var = tk.StringVar(value="hello world")
+        ttk.Entry(input_frame, textvariable=self._embed_input_var,
+                  width=50, font=("Consolas", 9)).pack(
+                      side=tk.LEFT, padx=(4, 8))
+
+        ttk.Button(input_frame, text="Tokenize",
+                   command=self._embed_tokenize).pack(side=tk.LEFT, padx=(0, 6))
+        ttk.Button(input_frame, text="Embed", style="Run.TButton",
+                   command=self._embed_run).pack(side=tk.LEFT)
+
+        # === Paned: Forward path (left) + Results (right) ===
+        paned = ttk.PanedWindow(tab, orient=tk.HORIZONTAL)
+        paned.pack(fill=tk.BOTH, expand=True, padx=8, pady=(0, 6))
+
+        # Left pane: Forward path
+        left_frame = ttk.Frame(paned)
+        paned.add(left_frame, weight=1)
+
+        self._embed_forward = scrolledtext.ScrolledText(
+            left_frame, wrap=tk.WORD, font=("Consolas", 9),
+            bg=self.BG_SECONDARY, fg=self.FG, insertbackground=self.FG,
+            selectbackground=self.OVERLAY, selectforeground=self.ACCENT,
+            borderwidth=0, highlightthickness=0,
+        )
+        self._embed_forward.pack(fill=tk.BOTH, expand=True)
+
+        # Right pane: Embedding results + reverse lookup
+        right_frame = ttk.Frame(paned)
+        paned.add(right_frame, weight=1)
+
+        self._embed_results = scrolledtext.ScrolledText(
+            right_frame, wrap=tk.WORD, font=("Consolas", 9),
+            bg=self.BG_SECONDARY, fg=self.FG, insertbackground=self.FG,
+            selectbackground=self.OVERLAY, selectforeground=self.ACCENT,
+            borderwidth=0, highlightthickness=0,
+        )
+        self._embed_results.pack(fill=tk.BOTH, expand=True)
+
+        # Configure text tags for both panes
+        for widget in (self._embed_forward, self._embed_results):
+            widget.tag_configure("heading", foreground=self.ACCENT,
+                                 font=("Consolas", 11, "bold"))
+            widget.tag_configure("section", foreground=self.GREEN,
+                                 font=("Consolas", 9, "bold"))
+            widget.tag_configure("symbol", foreground=self.YELLOW)
+            widget.tag_configure("id", foreground=self.ORANGE)
+            widget.tag_configure("vector", foreground=self.FG)
+            widget.tag_configure("dim", foreground=self.FG_DIM)
+            widget.tag_configure("sim_high", foreground=self.GREEN)
+            widget.tag_configure("sim_med", foreground=self.YELLOW)
+            widget.tag_configure("sim_low", foreground=self.FG_DIM)
+            widget.tag_configure("error", foreground=self.RED)
+            widget.tag_configure("info", foreground=self.ACCENT)
+
+    # -- Embedder helpers --------------------------------------------------
+
+    def _embed_append_forward(self, text: str, tag: Optional[str] = None) -> None:
+        """Thread-safe append to the forward-path pane."""
+        def _do():
+            self._embed_forward.insert(tk.END, text, tag if tag else ())
+            self._embed_forward.see(tk.END)
+        self.root.after(0, _do)
+
+    def _embed_append_results(self, text: str, tag: Optional[str] = None) -> None:
+        """Thread-safe append to the results pane."""
+        def _do():
+            self._embed_results.insert(tk.END, text, tag if tag else ())
+            self._embed_results.see(tk.END)
+        self.root.after(0, _do)
+
+    def _embed_clear_panes(self) -> None:
+        """Clear both output panes."""
+        def _do():
+            self._embed_forward.delete("1.0", tk.END)
+            self._embed_results.delete("1.0", tk.END)
+        self.root.after(0, _do)
+
+    def _embed_generate_demo(self) -> None:
+        """Generate tiny demo artifacts in a temp directory and load them."""
+        import json
+        try:
+            import numpy as np
+        except ImportError:
+            self._embed_status_var.set("ERROR: numpy not installed")
+            return
+
+        tmp_dir = tempfile.mkdtemp(prefix="mdg_embed_demo_")
+        tok_path = os.path.join(tmp_dir, "tokenizer.json")
+        emb_path = os.path.join(tmp_dir, "embeddings.npy")
+
+        spec = {
+            "vocab": {
+                "h": 0, "e": 1, "l": 2, "o": 3, "</w>": 4,
+                "w": 5, "r": 6, "d": 7, "he": 8, "ll": 9, "lo": 10,
+            },
+            "merges": [["h", "e"], ["l", "l"], ["l", "o"]],
+            "end_of_word": "</w>",
+        }
+        with open(tok_path, "w", encoding="utf-8") as f:
+            json.dump(spec, f)
+
+        rng = np.random.RandomState(42)
+        embeddings = rng.randn(11, 4).astype(np.float32)
+        np.save(emb_path, embeddings)
+
+        self._tok_path_var.set(tok_path)
+        self._emb_path_var.set(emb_path)
+        self._embed_load_artifacts()
+
+    def _embed_load_artifacts(self) -> None:
+        """Load DeterministicEmbedProvider from the paths in the UI entries."""
+        tok_path = self._tok_path_var.get().strip()
+        emb_path = self._emb_path_var.get().strip()
+
+        if not tok_path or not emb_path:
+            self._embed_status_var.set("ERROR: Both paths required")
+            return
+
+        try:
+            from src.core.model_bridge.deterministic_provider import (
+                DeterministicEmbedProvider,
+            )
+            self._embed_provider = DeterministicEmbedProvider(tok_path, emb_path)
+            vocab_size = len(self._embed_provider.vocab)
+            dims = self._embed_provider._dimensions
+            matrix_rows = self._embed_provider._embeddings.shape[0]
+            self._embed_status_var.set(
+                f"Loaded: vocab={vocab_size}, matrix={matrix_rows}\u00d7{dims}")
+            self.status_var.set("Embedder: artifacts loaded successfully")
+        except Exception as exc:
+            self._embed_provider = None
+            self._embed_status_var.set(f"ERROR: {exc}")
+            self.status_var.set(f"Embedder load failed: {exc}")
+
+    def _embed_tokenize(self) -> None:
+        """Tokenize input text and display BPE symbols + token IDs."""
+        if self._embed_provider is None:
+            self._embed_status_var.set("Load artifacts first")
+            return
+
+        text = self._embed_input_var.get().strip()
+        if not text:
+            return
+
+        self._embed_clear_panes()
+
+        def worker():
+            try:
+                provider = self._embed_provider
+
+                self._embed_append_forward("FORWARD PATH\n", "heading")
+                self._embed_append_forward("=" * 40 + "\n\n", "dim")
+
+                # Step 1: BPE symbols per word
+                self._embed_append_forward("Step 1: BPE Symbols\n", "section")
+                words = text.strip().split()
+                for word in words:
+                    symbols = provider._encode_word(word)
+                    sym_str = "  ".join(f"[{s}]" for s in symbols)
+                    self._embed_append_forward(f'  "{word}" \u2192 ', "dim")
+                    self._embed_append_forward(f"{sym_str}\n", "symbol")
+
+                # Step 2: Token IDs
+                self._embed_append_forward("\nStep 2: Token IDs\n", "section")
+                token_ids = provider._encode(text)
+                ids_str = ", ".join(str(tid) for tid in token_ids)
+                self._embed_append_forward(f"  [{ids_str}]\n", "id")
+
+                # Step 3: Decode round-trip
+                self._embed_append_forward(
+                    "\nStep 3: Decode (ID \u2192 Symbol)\n", "section")
+                decoded = provider.decode_token_ids(token_ids)
+                dec_str = ", ".join(decoded)
+                self._embed_append_forward(f"  [{dec_str}]\n", "symbol")
+
+                self._embed_append_forward(
+                    f"\nToken count: {len(token_ids)}\n", "info")
+
+                # Right pane hint
+                self._embed_append_results("Tokenize-only mode\n", "heading")
+                self._embed_append_results(
+                    "Press [Embed] to compute vectors and reverse lookup.\n",
+                    "dim")
+
+            except Exception as exc:
+                self._embed_append_forward(f"\nERROR: {exc}\n", "error")
+
+        thread = threading.Thread(target=worker, daemon=True)
+        thread.start()
+
+    def _embed_run(self) -> None:
+        """Full pipeline: tokenize -> embed -> reverse nearest tokens."""
+        if self._embed_provider is None:
+            self._embed_status_var.set("Load artifacts first")
+            return
+
+        text = self._embed_input_var.get().strip()
+        if not text:
+            return
+
+        self._embed_clear_panes()
+
+        def worker():
+            try:
+                import math
+                provider = self._embed_provider
+
+                # === LEFT PANE: Forward path ===
+                self._embed_append_forward("FORWARD PATH\n", "heading")
+                self._embed_append_forward("=" * 40 + "\n\n", "dim")
+
+                # Step 1: BPE symbols per word
+                self._embed_append_forward("Step 1: BPE Symbols\n", "section")
+                words = text.strip().split()
+                for word in words:
+                    symbols = provider._encode_word(word)
+                    sym_str = "  ".join(f"[{s}]" for s in symbols)
+                    self._embed_append_forward(f'  "{word}" \u2192 ', "dim")
+                    self._embed_append_forward(f"{sym_str}\n", "symbol")
+
+                # Step 2: Token IDs
+                self._embed_append_forward("\nStep 2: Token IDs\n", "section")
+                token_ids = provider._encode(text)
+                ids_str = ", ".join(str(tid) for tid in token_ids)
+                self._embed_append_forward(f"  [{ids_str}]\n", "id")
+
+                # Step 3: Decode round-trip
+                self._embed_append_forward(
+                    "\nStep 3: Decode (ID \u2192 Symbol)\n", "section")
+                decoded = provider.decode_token_ids(token_ids)
+                dec_str = ", ".join(decoded)
+                self._embed_append_forward(f"  [{dec_str}]\n", "symbol")
+
+                self._embed_append_forward(
+                    f"\nToken count: {len(token_ids)}\n", "info")
+
+                # Step 4: Embed
+                result = provider.embed_texts([text])
+                pooled = result.vectors[0]
+
+                self._embed_append_forward("\nStep 4: Mean Pool\n", "section")
+                vec_str = ", ".join(f"{v:.4f}" for v in pooled)
+                self._embed_append_forward(f"  [{vec_str}]\n", "vector")
+
+                norm = math.sqrt(sum(x * x for x in pooled))
+                self._embed_append_forward(
+                    f"  dims={len(pooled)}  norm={norm:.4f}\n", "dim")
+
+                # === RIGHT PANE: Results + Reverse ===
+                self._embed_append_results("EMBEDDING RESULT\n", "heading")
+                self._embed_append_results("=" * 40 + "\n\n", "dim")
+
+                self._embed_append_results("Pooled Vector\n", "section")
+                self._embed_append_results(f"  [{vec_str}]\n", "vector")
+                self._embed_append_results(
+                    f"  dims={len(pooled)}  norm={norm:.4f}\n\n", "dim")
+
+                # Reverse: nearest tokens
+                self._embed_append_results(
+                    "REVERSE: Nearest Tokens\n", "section")
+                self._embed_append_results("-" * 40 + "\n", "dim")
+
+                nearest = provider.nearest_tokens(pooled, k=10)
+                for symbol, sim, token_vec in nearest:
+                    if sim >= 0.7:
+                        tag = "sim_high"
+                    elif sim >= 0.3:
+                        tag = "sim_med"
+                    else:
+                        tag = "sim_low"
+
+                    tv_str = ", ".join(f"{v:.3f}" for v in token_vec[:4])
+                    if len(token_vec) > 4:
+                        tv_str += ", ..."
+                    self._embed_append_results(
+                        f"  {symbol:<10s} cos={sim:+.4f}  [{tv_str}]\n", tag)
+
+                self._embed_append_results(
+                    f"\n{len(nearest)} nearest tokens shown\n", "dim")
+
+            except Exception as exc:
+                self._embed_append_forward(f"\nERROR: {exc}\n", "error")
+                self._embed_append_results(f"\nERROR: {exc}\n", "error")
+
+        thread = threading.Thread(target=worker, daemon=True)
+        thread.start()
 
     # -----------------------------------------------------------------------
     # Main loop
