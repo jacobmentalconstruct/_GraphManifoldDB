@@ -1,0 +1,22 @@
+Project Tree: C:\Users\jacob\Documents\_UsefulHelperSCRIPTS\_mdgRAG\_showcase
+Generated: 2026-03-11 12:14:38.610624
+
+├── 📁 artifacts/
+│   ├── 📄 embeddings.npy
+│   └── 📄 tokenizer.json
+├── 📁 assets/
+│   └── 📄 logo.svg
+├── 📁 embedder_demo/
+│   ├── 📄 __init__.py
+│   ├── 📄 __main__.py
+│   ├── 📄 cli.py
+│   ├── 📄 core.py
+│   └── 📄 ui.py
+├── 📄 install.bat
+├── 📄 install.sh
+├── 📄 README.md
+├── 📄 requirements.txt
+├── 📄 run_cli.bat
+├── 📄 run_cli.sh
+├── 📄 run_ui.bat
+└── 📄 run_ui.sh
