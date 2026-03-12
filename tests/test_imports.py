@@ -81,9 +81,22 @@ SCAFFOLD_MODULES = [
     "src.core.training.cooccurrence",
     "src.core.training.npmi_matrix",
     "src.core.training.spectral",
+    # Ingestion
+    "src.core.ingestion",
+    "src.core.ingestion.config",
+    "src.core.ingestion.detection",
+    "src.core.ingestion.chunking",
+    "src.core.ingestion.tree_sitter_chunker",
+    "src.core.ingestion.graph_builder",
+    "src.core.ingestion.ingest",
     # Runtime
     "src.core.runtime",
     "src.core.runtime.runtime_controller",
+    # Debug - inspection
+    "src.core.debug.inspection",
+    # UI (web interface)
+    "src.ui",
+    "src.ui.server",
     # Adapters
     "src.adapters",
     # Utils

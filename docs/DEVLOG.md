@@ -345,3 +345,158 @@ Chronological record of each implementation phase, what was built, and key decis
 - `tests/test_imports.py` (MODIFIED — added deterministic_provider import check)
 - `src/adapters/legacy_source_notes.md` (MODIFIED — extraction record)
 - `requirements.txt` (MODIFIED — added numpy>=1.24.0)
+
+---
+
+## Phase 12.2 — Training Pipeline (BPE, Co-occurrence, NPMI, SVD)
+
+**Goal**: Build the offline training pipeline that produces the deterministic embedding artifacts consumed by Phase 12's inference-side `DeterministicEmbedProvider`. Four stages: BPE tokenizer training → co-occurrence statistics → NPMI matrix construction → spectral compression (SVD). Extracted from legacy `_STUFF-TO-INTEGRATE/deterministic_embedder/` per EXTRACTION_RULES.md.
+
+**What was built**:
+- **bpe_trainer.py** (NEW): `BPETrainer` class — trains BPE tokenizer from corpus text. API split: `train(texts)` for training, `save(path)` for persistence, `load(path)` for reload. Configurable vocab_size and min_frequency.
+- **cooccurrence.py** (NEW): `sliding_window_cooccurrence(token_streams, window_size)` and `compute_counts(sources, window_size)` — sliding window co-occurrence statistics over pre-tokenised streams. `BPETokenizer` class dropped (single-ownership violation); callers pass pre-tokenised streams.
+- **npmi_matrix.py** (NEW): `build_npmi_matrix(cooccurrence_counts, token_counts, total_pairs)` — NPMI normalisation + friction transformation + sparse CSR matrix output.
+- **spectral.py** (NEW): `compute_embeddings(npmi_matrix, dimensions)` — truncated SVD via `scipy.sparse.linalg.svds`. Zero-padding guard for k > effective dims (handles tiny test matrices).
+
+**Key decisions**:
+- All four modules are pure functional — no side effects, no I/O except explicit save/load.
+- Lazy scipy import in spectral.py (same pattern as numpy in deterministic_provider.py).
+- BPETokenizer class from legacy code was NOT extracted — it violates single-ownership (tokenization is also owned by inference-side provider). Callers pass pre-tokenised token ID streams.
+- Training pipeline and inference pipeline share only the artifact format (tokenizer.json + embeddings.npy), not code.
+
+**Files changed**:
+- `src/core/training/bpe_trainer.py` (NEW)
+- `src/core/training/cooccurrence.py` (NEW)
+- `src/core/training/npmi_matrix.py` (NEW)
+- `src/core/training/spectral.py` (NEW)
+- `src/core/training/__init__.py` (NEW)
+- `tests/test_imports.py` (MODIFIED — added 4 training module import checks)
+- `src/adapters/legacy_source_notes.md` (MODIFIED — 4 extraction records)
+
+**Result**: 504/504 tests passing (Phases 1-12.2)
+
+---
+
+## Phase 13 — Ingestion Pipeline
+
+**Goal**: Build the ingestion pipeline — the "fuel pump" that gets data INTO manifolds. Without ingestion, the system is an engine with no way to load content. This is the critical-path blocker for the North Star (agent-driven project interface). Tree-sitter based parsing covers 20+ languages; prose fallback handles text/markdown.
+
+**Source material**: Chunking logic extracted from `_UsefulDataCurationTools/_TripartiteDataSTORE` per EXTRACTION_RULES.md — rewritten, not verbatim. Class-based architecture converted to functional API.
+
+**What was built**:
+- **config.py** (NEW): `IngestionConfig` dataclass with chunking/skip/embedding settings. `LANGUAGE_TIERS` dict (4-tier tree-sitter classification: deep_semantic, shallow_semantic, structural, hybrid). `EXT_TO_LANGUAGE` mapping (30+ extensions). Extension sets (`CODE_EXTENSIONS`, `PROSE_EXTENSIONS`, `STRUCTURED_EXTENSIONS`, `MARKUP_EXTENSIONS`). Skip lists (`SKIP_DIRS`, `SKIP_EXTENSIONS`).
+- **detection.py** (NEW): `SourceFile` dataclass (path, file_hash, source_type, language, encoding, text, lines, byte_size). `detect_file()` — reads file, detects language/type/encoding, computes SHA256 hash. `walk_sources()` — recursive directory walk with skip rules. `estimate_tokens()` — canonical token estimation.
+- **chunking.py** (NEW): `RawChunk` dataclass (intermediate pipeline type). `chunk_prose()` — two-pass strategy: heading split → paragraph/sliding window within each section. Generates summary chunks when enabled. Handles empty files, no-heading files, and mixed heading structures.
+- **tree_sitter_chunker.py** (NEW): `chunk_tree_sitter()` — 4-tier tree-sitter chunking. Routes to `_chunk_hierarchical` (deep_semantic), `_chunk_flat` (shallow_semantic), `_chunk_structural` (structural), `_chunk_markup` (hybrid). `FUNCTION_QUERIES`, `CLASS_QUERIES`, `IMPORT_QUERIES` for 14 languages. Lazy tree-sitter import — environments without tree-sitter fall back to prose chunker. `_fallback_line_chunker()` for parse failures.
+- **graph_builder.py** (NEW): `IngestionArtifacts` dataclass. `build_graph_objects()` — translates RawChunks into graph-native objects: 1 SOURCE node per file, N SECTION nodes from heading paths, M CHUNK nodes, M Chunk objects (content-addressed via make_chunk_hash), M ChunkOccurrences, CONTAINS edges (SOURCE→SECTION→CHUNK), NEXT edges (chunk ordering), HierarchyEntry records, all bindings (NodeChunkBinding, NodeHierarchyBinding), all provenance records (stage=INGESTION).
+- **ingest.py** (NEW): `IngestionResult` dataclass with `merge()` for directory aggregation. `ingest_file()` — orchestrates detection → chunking → graph build → storage → embedding. `ingest_directory()` — walks directory, calls `ingest_file()` per file, aggregates results. Chunker routing: tree-sitter for code/structured → prose for text/md → fallback line chunker. Embedding step: optional `embed_fn` callback (same pattern as QueryProjection), creates Embedding + NodeEmbeddingBinding per chunk.
+- **__init__.py** (NEW): Public exports — `IngestionConfig`, `IngestionResult`, `ingest_file`, `ingest_directory`.
+- **test_phase13_ingestion.py** (NEW): 70 tests across 12 test classes — TestIngestionConfig, TestLanguageTiers, TestDetection, TestWalkSources, TestEstimateTokens, TestProseChunking, TestTreeSitterChunker, TestGraphBuilder, TestIngestFile, TestIngestDirectory, TestIdempotency, TestEmbeddingIntegration.
+
+**Key decisions**:
+- Functional API pattern — free functions (`ingest_file`, `ingest_directory`) matching scoring, extraction, hydration patterns. No class hierarchy.
+- `embed_fn` callback injection — same pattern as QueryProjection. Ingestion receives a capability, not a backend object. Graceful skip when no embed_fn provided.
+- Lazy tree-sitter import — `tree_sitter` imported only inside functions, never at module level. Same pattern as numpy in deterministic_provider.py. Environments without tree-sitter fall back to prose chunking.
+- Content-addressed chunk dedup — `make_chunk_hash(text)` produces `ChunkHash`, storage uses `INSERT OR IGNORE` for natural deduplication across files.
+- RawChunk as intermediate type — sits between chunking and graph building. Not stored, not exported. Carries heading_path, semantic_depth, structural_depth, language_tier for graph construction.
+- TripartiteDataSTORE extraction — class-based architecture (BaseChunker/ProseChunker/TreeSitterChunker) converted to functional. SpanRef/Chunk model replaced with RawChunk dataclass. All extractions rewritten per EXTRACTION_RULES.md.
+
+**Files changed**:
+- `src/core/ingestion/__init__.py` (NEW)
+- `src/core/ingestion/config.py` (NEW)
+- `src/core/ingestion/detection.py` (NEW)
+- `src/core/ingestion/chunking.py` (NEW)
+- `src/core/ingestion/tree_sitter_chunker.py` (NEW)
+- `src/core/ingestion/graph_builder.py` (NEW)
+- `src/core/ingestion/ingest.py` (NEW)
+- `tests/test_phase13_ingestion.py` (NEW — 70 tests)
+- `tests/test_imports.py` (MODIFIED — added 6 ingestion module import checks)
+- `src/adapters/legacy_source_notes.md` (MODIFIED — 4 extraction records)
+- `TODO.md` (MODIFIED — state line updated, Phase 13 items checked off)
+
+**Result**: 574/574 tests passing (504 existing + 70 new)
+
+---
+
+## Phase 14 — CLI Query Path
+
+**Goal**: Make the system usable from the command line. Replace the bootstrap-only `app.py` with a real CLI entry point with two subcommands: `ingest` (get data into manifolds) and `query` (run the full pipeline against an existing manifold). End-to-end testable without Ollama.
+
+**What was built**:
+- **app.py** (REWRITTEN): Full CLI with argparse, two subcommands, output formatting, and error handling.
+  - `build_parser()` — argparse with `ingest` and `query` subparsers.
+  - `cmd_ingest(args)` — creates/opens manifold DB, builds embed_fn from ModelBridge if embeddings enabled, calls `ingest_file()` or `ingest_directory()`, prints summary to stderr.
+  - `cmd_query(args)` — opens manifold, loads ALL node IDs via `store.list_nodes()`, builds PipelineConfig/ModelBridgeConfig from args, runs `RuntimeController.run()`, formats output (plain/JSON/verbose).
+  - `format_result_plain()` — answer text or evidence summary when synthesis skipped.
+  - `format_result_json()` — `inspect_pipeline_result()` + `dump_evidence_bag()` as JSON.
+  - `format_verbose()` — stage timing, scoring summary, top-5 gravity, evidence bag stats.
+  - `handle_error()` — stage-attributed PipelineError messages, ModelConnectionError, FileNotFoundError.
+  - Helper functions: `_build_embed_fn()`, `_load_all_node_ids()`, `_build_model_bridge_config()`, `_sanitize_manifold_id()`.
+
+**Key decisions**:
+- **argparse only** — pure Python constraint, no click/typer. Subcommand pattern with `set_defaults(func=...)`.
+- **Default skip_synthesis=True** — CLI works out of the box without Ollama. Synthesis opt-in via `--synthesis-model MODEL`.
+- **Load ALL node IDs for projection** — `RuntimeController.run()` requires explicit `external_node_ids`. CLI reads all nodes from the manifold. Simple and correct for the common case.
+- **stdout for results, stderr for logs** — Unix convention. `python -m src.app query ... > result.json` works.
+- **Rewrite app.py** — it was 35 lines of bootstrap. Making it the CLI entry point is the natural evolution.
+- **No REPL mode** — one query per invocation. Keep it simple.
+- **Two existing tests updated**: `test_scaffold_smoke.py::test_app_main_returns_zero` → `test_app_main_no_subcommand_returns_one` (main now returns 1 with no args). `test_phase10_hardening.py::test_app_no_sys_import` → `test_app_no_sys_path_manipulation` (sys import is now valid for stderr).
+
+**Files changed**:
+- `src/app.py` (REWRITTEN — CLI entry point with ingest/query subcommands)
+- `tests/test_phase14_cli.py` (NEW — 41 tests across 7 test classes)
+- `tests/test_scaffold_smoke.py` (MODIFIED — updated main() test for new CLI behavior)
+- `tests/test_phase10_hardening.py` (MODIFIED — updated sys import test to sys.path test)
+- `TODO.md` (MODIFIED — state line updated, Phase 14 items checked off)
+
+**Result**: 622/622 tests passing (574 existing + 41 new + 7 existing updated)
+
+---
+
+## Phase 15 — Web UI (2026-03-11)
+
+**Goal**: Build an interactive web UI for exploring pipeline results, visualizing the graph, and inspecting all intermediate artifacts. Replace CLI-only workflow with a browser-based interface.
+
+**What was built**:
+- **Technology**: FastAPI + single-page HTML + Cytoscape.js (CDN). No build step, no npm.
+- **`src/ui/server.py`** (NEW): FastAPI application with REST endpoints.
+  - `create_app(default_db)` — factory function returning configured FastAPI app.
+  - `POST /api/query` — runs full pipeline, returns JSON with overview, evidence, graph, scores, hydrated bundle, timing.
+  - `POST /api/ingest` — ingests files/directories into a manifold DB.
+  - `GET /api/manifold` — returns manifold metadata and node/edge counts.
+  - `GET /api/manifold/graph` — returns Cytoscape.js-compatible graph JSON.
+  - `GET /api/health` — health check.
+  - `serialize_graph()` — converts manifold nodes/edges to Cytoscape.js format with gravity coloring. Handles both RAM and disk manifolds via optional ManifoldStore fallback.
+  - `_build_query_response()` — assembles full response using `inspect_pipeline_result()`, `dump_evidence_bag()`, `dump_hydrated_bundle()`, and `serialize_graph()`.
+  - Exception handlers for PipelineError (500 with stage), FileNotFoundError (404), ValueError (400).
+  - `start(host, port, default_db)` — launches uvicorn server.
+- **`src/ui/static/index.html`** (NEW): Single-page dark-theme UI.
+  - Header bar: DB path input, Load button, Ingest button, manifold status.
+  - Query panel: text input, Run button, alpha/beta controls, skip synthesis checkbox.
+  - Results area: answer text or evidence summary, expandable timing/scores/evidence sections.
+  - Graph panel: Cytoscape.js force-directed layout, nodes sized/colored by gravity, bridge edges dashed/orange, click-to-inspect node detail popup.
+  - Score table: sortable by gravity/structural/semantic columns.
+  - Pipeline status bar: stage pill indicators (done/skipped), total time, degraded warnings.
+  - Ingest modal: source path, DB path, skip embeddings toggle.
+- **`src/app.py`** (MODIFIED): Added `serve` subcommand.
+  - `_add_serve_parser()` — argparse for `--port`, `--host`, `--db`.
+  - `cmd_serve(args)` — checks UI deps, lazy-imports server, starts it.
+  - `_check_ui_deps()` — verifies fastapi/uvicorn are installed.
+
+**Key decisions**:
+- **FastAPI + Cytoscape.js** — graph visualization is critical for a Graph RAG system. Single HTML file with CDN = no frontend toolchain. FastAPI provides built-in TestClient for testing.
+- **Lazy-imported dependencies** — fastapi/uvicorn only imported when `serve` subcommand runs. Matches tree-sitter pattern. Project stays "pure Python" for non-UI usage.
+- **ManifoldStore fallback in serialize_graph()** — disk manifolds have empty in-memory collections when reopened. Function detects this and reads via store. RAM manifolds (VirtualManifold from pipeline) use get_nodes()/get_edges() directly.
+- **serve subcommand** — natural evolution from CLI. `python -m src.app serve --db ./manifold.db` starts the UI.
+- **All debug dump functions reused** — `inspect_pipeline_result()`, `dump_evidence_bag()`, `dump_hydrated_bundle()` produce JSON-serializable dicts. No new serialization code needed.
+
+**Files changed**:
+- `src/ui/__init__.py` (NEW — package marker)
+- `src/ui/server.py` (NEW — FastAPI application, ~340 lines)
+- `src/ui/static/index.html` (NEW — single-page UI, ~490 lines)
+- `src/app.py` (MODIFIED — added serve subcommand, ~30 lines added)
+- `tests/test_phase15_ui.py` (NEW — 42 tests across 8 test classes)
+- `tests/test_imports.py` (MODIFIED — added src.ui, src.ui.server, src.core.debug.inspection)
+- `TODO.md` (MODIFIED — state line updated, Phase 15 items checked off)
+
+**Result**: 667/667 tests passing (622 existing + 42 new Phase 15 + 3 new import tests)

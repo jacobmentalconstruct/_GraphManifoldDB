@@ -135,12 +135,13 @@ class TestPackagingCleanup:
         assert "sys.path.insert" not in stripped
         assert "sys.path" not in stripped
 
-    def test_app_no_sys_import(self):
-        """app.py must not import sys (no longer needed)."""
+    def test_app_no_sys_path_manipulation(self):
+        """app.py must not manipulate sys.path (no path hacks)."""
         import pathlib
         app_path = pathlib.Path(__file__).parent.parent / "src" / "app.py"
         content = app_path.read_text()
-        assert "import sys" not in content
+        # sys import is fine (needed for sys.stderr), but sys.path must not appear
+        assert "sys.path" not in content
 
 
 # ===================================================================

@@ -504,6 +504,68 @@ as embed_fn callback into QueryProjection.
 
 ---
 
+## Ingestion Pipeline
+
+**Purpose**: Get data INTO manifolds. Detects file types, chunks content using tree-sitter
+(code, 20+ languages) or prose splitting (text/markdown), builds graph-native objects
+(nodes, edges, chunks, hierarchy, bindings, provenance), persists via ManifoldStore,
+and optionally generates embeddings. The "fuel pump" — without ingestion, the system
+has no content to query.
+
+**Owned files**:
+- `src/core/ingestion/__init__.py`
+- `src/core/ingestion/config.py`
+- `src/core/ingestion/detection.py`
+- `src/core/ingestion/chunking.py`
+- `src/core/ingestion/tree_sitter_chunker.py`
+- `src/core/ingestion/graph_builder.py`
+- `src/core/ingestion/ingest.py`
+
+**Allowed to own**: File detection, language classification, directory walking, skip
+rules, text chunking (prose + tree-sitter), RawChunk construction, graph object
+creation (SOURCE/SECTION/CHUNK nodes, CONTAINS/NEXT edges, hierarchy, bindings),
+ingestion-stage provenance stamping, embedding generation during ingestion, ingestion
+result aggregation.
+
+**Must not own**: ManifoldStore CRUD implementation (that's Store), manifold creation
+(that's Factory), projection, fusion, scoring, extraction, hydration, model bridge
+internals, prompt construction. Ingestion calls Store.add_node/add_edge/etc. but
+doesn't own the SQL.
+
+**Inputs**: File or directory path, target BaseManifold (EXTERNAL role), ManifoldStore,
+optional IngestionConfig, optional embed_fn callback.
+
+**Outputs**: IngestionResult (files_processed, files_skipped, chunks_created,
+nodes_created, edges_created, embeddings_created, warnings, timing_seconds).
+
+**Upstream dependencies**: ManifoldStore (for persistence), BaseManifold (target
+manifold), all type modules (Node, Edge, Chunk, ChunkOccurrence, Embedding,
+HierarchyEntry, bindings, provenance, ids, enums). tree-sitter (lazy import,
+optional — falls back to prose chunker without it).
+
+**Downstream consumers**: RuntimeController (future: auto-ingest before query),
+programmatic callers, CLI tools.
+
+**Legacy source replaced**: Chunking logic from `_TripartiteDataSTORE` — ProseChunker
+(heading split + sliding window), TreeSitterChunker (4-tier language-aware parsing),
+file detection (SourceFile, walk_source). All rewritten per EXTRACTION_RULES.md.
+Class-based architecture converted to functional API.
+
+**Functions provided**:
+- `ingest_file(file_path, manifold, store, config, embed_fn)` — single file ingestion
+- `ingest_directory(directory_path, manifold, store, config, embed_fn)` — recursive directory ingestion
+- `detect_file(path)` — file detection and classification
+- `walk_sources(root, config)` — recursive file walker with skip rules
+- `chunk_prose(source, config)` — prose chunking (headings + sliding window)
+- `chunk_tree_sitter(source, config)` — tree-sitter chunking (4 tier strategies)
+- `build_graph_objects(raw_chunks, source, manifold_id, config)` — graph object creation
+
+**Expansion notes**: Batch embedding (O-031), incremental re-ingestion with change
+detection (O-032), compound document detection (O-033), directory-level hierarchy
+nodes (O-034). Tree-sitter `query()` deprecation tracked in W-004.
+
+---
+
 ## Debug / Inspection Helpers
 
 **Purpose**: Development-time diagnostic tools for inspecting manifold state, scoring

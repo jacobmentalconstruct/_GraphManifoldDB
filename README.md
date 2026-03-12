@@ -14,9 +14,9 @@ Your corpus ──→ Graph Manifold ──→ Query ──→ Scored Evidence �
 ```
 
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)]()
-[![Tests](https://img.shields.io/badge/tests-499%20passing-brightgreen.svg)]()
+[![Tests](https://img.shields.io/badge/tests-504%20passing-brightgreen.svg)]()
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE.md)
-[![Phase](https://img.shields.io/badge/phase-12%20of%2017-orange.svg)]()
+[![Phase](https://img.shields.io/badge/phase-12%20of%2023-orange.svg)]()
 
 ---
 
@@ -367,7 +367,7 @@ np.save("artifacts/embeddings.npy", embeddings)
 
 ## Project Status
 
-### Current Phase: 12 of 17
+### Current Phase: 12 of 23
 
 | Phase | Status | Description |
 |-------|--------|-------------|
@@ -387,10 +387,16 @@ np.save("artifacts/embeddings.npy", embeddings)
 | 15 | 🔲 Planned | UI interface |
 | 16 | 🔲 Planned | Weighted PageRank |
 | 17 | 🔲 Planned | ScoringConfig dataclass |
+| 18 | 🔲 Planned | Real SUMMARY hydration mode |
+| 19 | 🔲 Planned | Connection lifecycle management |
+| 20 | 🔲 Planned | Multi-provider model bridge |
+| 21 | 🔲 Planned | Advanced extraction strategies |
+| 22 | 🔲 Planned | Pipeline caching |
+| 23 | 🔲 Planned | Streaming pipeline results |
 
 ### Test Coverage
 
-499 tests across 13 test files. Zero failures. ~10 second runtime.
+504 tests across 13 test files. Zero failures. ~10 second runtime.
 
 ```
 tests/

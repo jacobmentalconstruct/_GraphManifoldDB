@@ -1,21 +1,79 @@
 Project Tree: C:\Users\jacob\Documents\_UsefulHelperSCRIPTS\_mdgRAG
-Generated: 2026-03-10 07:24:30.212630
+Generated: 2026-03-11 15:34:48.192181
 
+├── 📁 _showcase/
+│   ├── 📁 artifacts/
+│   │   ├── 📄 embeddings.npy
+│   │   └── 📄 tokenizer.json
+│   ├── 📁 assets/
+│   │   └── 📄 logo.svg
+│   ├── 📁 embedder_demo/
+│   │   ├── 📄 __main__.py
+│   │   ├── 📄 cli.py
+│   │   ├── 📄 core.py
+│   │   └── 📄 ui.py
+│   ├── 📄 install.bat
+│   ├── 📄 install.sh
+│   ├── 📄 README.md
+│   ├── 📄 requirements.txt
+│   ├── 📄 run_cli.bat
+│   ├── 📄 run_cli.sh
+│   ├── 📄 run_ui.bat
+│   └── 📄 run_ui.sh
+├── 📁 _STUFF-TO-INTEGRATE/
+│   └── 📁 deterministic_embedder/
+│       ├── 📄 Concept Evolution & Design History.md
+│       ├── 📄 cooccurrence_graph.py
+│       ├── 📄 inference_engine.py
+│       ├── 📄 pmi_matrix.py
+│       ├── 📄 run_phase_1.py
+│       ├── 📄 run_phase_1.py.txt
+│       ├── 📄 spectral_compression.py
+│       └── 📄 tokenizer_trainer.py
 ├── 📁 docs/
+│   ├── 📁 _screenshots/
+│   │   ├── 📄 MathematicalSemanticVectorEmbedder.png
+│   │   └── 📄 Tokenizer_First_RUN.png
 │   ├── 📄 ARCHITECTURE.md
+│   ├── 📄 BPE_SVD_WHITEPAPER.md
 │   ├── 📄 DEVLOG.md
 │   ├── 📄 EXTRACTION_RULES.md
+│   ├── 📄 MATH_PROBLEMS_RELATING_TO_EMBEDDING.md
 │   ├── 📄 OPPORTUNITIES.md
-│   ├── 📄 PHASE_1_SCOPE.md
 │   ├── 📄 SYSTEM_MAP.md
+│   ├── 📄 TRANSLATION_THEORY.md
+│   ├── 📄 UI_WIRING.md
 │   └── 📄 WATCHLIST.md
+├── 📁 graph_manifold.egg-info/
+│   ├── 📄 dependency_links.txt
+│   ├── 📄 PKG-INFO
+│   ├── 📄 requires.txt
+│   ├── 📄 SOURCES.txt
+│   └── 📄 top_level.txt
+├── 📁 packages/
+│   └── 📁 bpe_svd/
+│       ├── 📁 src/
+│       │   ├── 📁 bpe_svd/
+│       │   │   ├── 📁 inference/
+│       │   │   │   └── 📄 provider.py
+│       │   │   ├── 📁 training/
+│       │   │   │   ├── 📄 bpe_trainer.py
+│       │   │   │   ├── 📄 cooccurrence.py
+│       │   │   │   ├── 📄 npmi_matrix.py
+│       │   │   │   └── 📄 spectral.py
+│       │   └── 📁 bpe_svd.egg-info/
+│       │       ├── 📄 dependency_links.txt
+│       │       ├── 📄 PKG-INFO
+│       │       ├── 📄 requires.txt
+│       │       ├── 📄 SOURCES.txt
+│       │       └── 📄 top_level.txt
+│       ├── 📄 pyproject.toml
+│       └── 📄 README.md
 ├── 📁 src/
 │   ├── 📁 adapters/
-│   │   ├── 📄 __init__.py
 │   │   └── 📄 legacy_source_notes.md
 │   ├── 📁 core/
 │   │   ├── 📁 contracts/
-│   │   │   ├── 📄 __init__.py
 │   │   │   ├── 📄 evidence_bag_contract.py
 │   │   │   ├── 📄 fusion_contract.py
 │   │   │   ├── 📄 hydration_contract.py
@@ -23,53 +81,47 @@ Generated: 2026-03-10 07:24:30.212630
 │   │   │   ├── 📄 model_bridge_contract.py
 │   │   │   └── 📄 projection_contract.py
 │   │   ├── 📁 debug/
-│   │   │   ├── 📄 __init__.py
 │   │   │   ├── 📄 inspection.py
 │   │   │   └── 📄 score_dump.py
 │   │   ├── 📁 extraction/
-│   │   │   ├── 📄 __init__.py
 │   │   │   ├── 📄 extractor.py
 │   │   │   └── 📄 extractor_placeholder.py
 │   │   ├── 📁 factory/
-│   │   │   ├── 📄 __init__.py
 │   │   │   └── 📄 manifold_factory.py
 │   │   ├── 📁 fusion/
-│   │   │   ├── 📄 __init__.py
 │   │   │   └── 📄 fusion_engine.py
 │   │   ├── 📁 hydration/
-│   │   │   ├── 📄 __init__.py
 │   │   │   ├── 📄 hydrator.py
 │   │   │   └── 📄 hydrator_placeholder.py
 │   │   ├── 📁 manifolds/
-│   │   │   ├── 📄 __init__.py
 │   │   │   ├── 📄 base_manifold.py
 │   │   │   ├── 📄 external_manifold.py
 │   │   │   ├── 📄 identity_manifold.py
 │   │   │   └── 📄 virtual_manifold.py
 │   │   ├── 📁 math/
-│   │   │   ├── 📄 __init__.py
 │   │   │   ├── 📄 annotator.py
 │   │   │   ├── 📄 friction.py
 │   │   │   ├── 📄 scoring.py
 │   │   │   └── 📄 scoring_placeholders.py
 │   │   ├── 📁 model_bridge/
-│   │   │   ├── 📄 __init__.py
+│   │   │   ├── 📄 deterministic_provider.py
 │   │   │   └── 📄 model_bridge.py
 │   │   ├── 📁 projection/
-│   │   │   ├── 📄 __init__.py
 │   │   │   ├── 📄 _projection_core.py
 │   │   │   ├── 📄 external_projection.py
 │   │   │   ├── 📄 identity_projection.py
 │   │   │   └── 📄 query_projection.py
 │   │   ├── 📁 runtime/
-│   │   │   ├── 📄 __init__.py
 │   │   │   └── 📄 runtime_controller.py
 │   │   ├── 📁 store/
-│   │   │   ├── 📄 __init__.py
 │   │   │   ├── 📄 _schema.py
 │   │   │   └── 📄 manifold_store.py
+│   │   ├── 📁 training/
+│   │   │   ├── 📄 bpe_trainer.py
+│   │   │   ├── 📄 cooccurrence.py
+│   │   │   ├── 📄 npmi_matrix.py
+│   │   │   └── 📄 spectral.py
 │   │   ├── 📁 types/
-│   │   │   ├── 📄 __init__.py
 │   │   │   ├── 📄 bindings.py
 │   │   │   ├── 📄 enums.py
 │   │   │   ├── 📄 graph.py
@@ -77,17 +129,15 @@ Generated: 2026-03-10 07:24:30.212630
 │   │   │   ├── 📄 manifests.py
 │   │   │   ├── 📄 provenance.py
 │   │   │   └── 📄 runtime_state.py
-│   │   └── 📄 __init__.py
 │   ├── 📁 utils/
-│   │   ├── 📄 __init__.py
 │   │   ├── 📄 file_utils.py
 │   │   └── 📄 logging_utils.py
-│   ├── 📄 __init__.py
 │   └── 📄 app.py
 ├── 📁 tests/
-│   ├── 📄 __init__.py
 │   ├── 📄 test_imports.py
 │   ├── 📄 test_phase10_hardening.py
+│   ├── 📄 test_phase11_query_embedding.py
+│   ├── 📄 test_phase12_deterministic_embed.py
 │   ├── 📄 test_phase2_types.py
 │   ├── 📄 test_phase3_storage.py
 │   ├── 📄 test_phase4_projection_fusion.py
@@ -97,7 +147,15 @@ Generated: 2026-03-10 07:24:30.212630
 │   ├── 📄 test_phase8_model_bridge.py
 │   ├── 📄 test_phase9_pipeline.py
 │   └── 📄 test_scaffold_smoke.py
+├── 📁 tools/
+│   └── 📄 diagnostic_ui.py
 ├── 📄 .gitignore
+├── 📄 diag.bat
+├── 📄 LICENSE.md
 ├── 📄 pyproject.toml
 ├── 📄 README.md
-└── 📄 requirements.txt
+├── 📄 requirements.txt
+├── 📄 run.bat
+├── 📄 setup_env.bat
+├── 📄 test.bat
+└── 📄 TODO.md

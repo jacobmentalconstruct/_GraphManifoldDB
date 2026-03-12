@@ -236,3 +236,35 @@ Updated as new opportunities are identified. Each item tagged with priority
 - **Location**: `src/core/runtime/runtime_controller.py` — `run()`
 - **Gap**: `run()` returns a complete PipelineResult only after all stages finish. No way to observe intermediate artifacts or stream partial results to a caller.
 - **Enhancement**: Add a callback or generator-based interface that yields intermediate artifacts as each stage completes, enabling progressive UI rendering or early-stop decisions.
+
+---
+
+## Ingestion & Data Loading
+
+### O-031 · Batch embedding during ingestion
+- **Priority**: medium
+- **Spotted**: Phase 13
+- **Location**: `src/core/ingestion/ingest.py` — `_embed_chunks()`
+- **Gap**: Embeddings are generated one chunk at a time via `embed_fn(text)`. For large corpora, batching multiple chunks per embed call would significantly reduce overhead (fewer HTTP round-trips for Ollama, fewer numpy operations for deterministic).
+- **Enhancement**: Accept `batch_embed_fn: Callable[[List[str]], List[Sequence[float]]]` alongside or instead of single-text `embed_fn`. Accumulate chunks, embed in batches of N, create bindings from batched results.
+
+### O-032 · Incremental re-ingestion (change detection)
+- **Priority**: high
+- **Spotted**: Phase 13
+- **Location**: `src/core/ingestion/ingest.py` — `ingest_file()`
+- **Gap**: Currently, re-ingesting a file creates duplicate nodes/edges (chunks are deduped via content-addressing, but nodes and edges are not). No mechanism to detect unchanged files and skip them, or to update the graph when a file changes (remove old nodes, add new ones).
+- **Enhancement**: Before ingestion, query the manifold for a SOURCE node matching the file path. If file_hash matches, skip. If file_hash differs, remove old graph objects for that file, then re-ingest. Requires `store.delete_nodes_by_source()` or similar.
+
+### O-033 · Compound document detection
+- **Priority**: low
+- **Spotted**: Phase 13
+- **Location**: `src/core/ingestion/detection.py` — `detect_file()`
+- **Gap**: Files like Jupyter notebooks (.ipynb), literate programming files (.Rmd, .nw), or polyglot configs contain multiple content types in one file. Currently treated as a single source_type based on extension.
+- **Enhancement**: Detect compound documents and split into virtual sub-sources, each chunked with the appropriate strategy (code chunks via tree-sitter, prose chunks via heading splitter).
+
+### O-034 · Directory-level hierarchy nodes
+- **Priority**: medium
+- **Spotted**: Phase 13
+- **Location**: `src/core/ingestion/ingest.py` — `ingest_directory()`
+- **Gap**: `ingest_directory()` ingests files individually but doesn't create DIRECTORY or PROJECT nodes to represent the folder structure. No CONTAINS edges from directory to file SOURCE nodes.
+- **Enhancement**: Create NodeType.DIRECTORY nodes for each traversed directory, with CONTAINS edges forming the directory tree. Add a PROJECT root node for the top-level directory. Enables structural queries like "what files are in src/core/?".

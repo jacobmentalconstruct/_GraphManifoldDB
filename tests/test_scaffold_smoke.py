@@ -17,7 +17,9 @@ def test_runtime_controller_bootstrap() -> None:
     controller.bootstrap()
 
 
-def test_app_main_returns_zero() -> None:
-    """main() should return 0 indicating clean startup."""
-    result = main()
-    assert result == 0, f"main() returned {result}, expected 0"
+def test_app_main_no_subcommand_returns_one() -> None:
+    """main() with no subcommand should return 1 (print help)."""
+    from unittest.mock import patch
+    with patch("sys.argv", ["graph-manifold"]):
+        result = main()
+    assert result == 1, f"main() returned {result}, expected 1 (no subcommand)"

@@ -105,6 +105,27 @@ class BaseManifold(ManifoldContract):
         """The live SQLite connection, or None for RAM-only manifolds."""
         return self._connection
 
+    def close(self) -> None:
+        """Close the underlying SQLite connection if present.
+
+        No-op for RAM manifolds (connection is None) or already-closed connections.
+        Safe to call multiple times.
+        """
+        if self._connection is not None:
+            try:
+                self._connection.close()
+            except Exception:
+                pass  # Already closed or unusable
+            self._connection = None
+
+    def __enter__(self):
+        """Enter context manager. Returns self."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        """Exit context manager. Closes the connection."""
+        self.close()
+
     # --- identity ---
 
     def get_metadata(self) -> ManifoldMetadata:

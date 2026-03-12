@@ -1,5 +1,13 @@
-# Phase 1: Scaffold only — no heavy dependencies
-# Future phases will add targeted dependencies as logic is extracted
+# Graph Manifold — Python dependencies
+#
+# Core (always required)
+numpy>=1.24.0                  # Deterministic BPE-SVD embeddings
 
-# Deterministic embedding backend (optional — required only for local BPE-SVD embeddings)
-numpy>=1.24.0
+# Web UI (required for `python -m src.app serve`)
+fastapi>=0.100.0
+uvicorn>=0.23.0
+
+# Optional — uncomment if needed
+# tree-sitter>=0.20.0          # Code-aware chunking
+# tree-sitter-python>=0.20.0   # Python grammar for tree-sitter
+# scipy>=1.10.0                # Advanced similarity metrics

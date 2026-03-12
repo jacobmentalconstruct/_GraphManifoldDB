@@ -54,6 +54,15 @@ These are Phase 1 stubs that raise `NotImplementedError`. They will be replaced 
 
 ---
 
+### W-004 · Tree-sitter `query()` deprecated in favor of `Query()` constructor
+- **Origin**: Phase 13 implementation
+- **Status**: watch
+- **Location**: `src/core/ingestion/tree_sitter_chunker.py` — `_run_query()` function (line ~72)
+- **Details**: tree-sitter ≥0.23 deprecates `Language.query(pattern)` in favor of `ts.Query(language, pattern)`. Current code uses the old API. 15 deprecation warnings emitted during test runs. Non-breaking — old API still works but may be removed in a future tree-sitter release.
+- **Action**: Update `_run_query()` to use `ts.Query(language, pattern)` when the next tree-sitter version is tested.
+
+---
+
 ## Legacy Migration Targets
 
 Documented "Future extraction targets" in module docstrings. These track which legacy
